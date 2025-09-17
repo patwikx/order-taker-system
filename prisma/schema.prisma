@@ -1,0 +1,384 @@
+// Restaurant Order Management System - Prisma Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // or "mysql", "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Business Unit Management
+model BusinessUnit {
+  id        String   @id @default(uuid())
+  code      String   @unique // Short code (e.g., "REST001", "REST002")
+  name      String // Restaurant name
+  address   String?
+  phone     String?
+  email     String?
+  timezone  String   @default("Asia/Manila")
+  currency  String   @default("PHP")
+  taxRate   Decimal  @default(0.12) @db.Decimal(5, 4) // 12% VAT
+  isActive  Boolean  @default(true)
+  settings  Json? // Business unit specific settings
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  users      UserBusinessUnit[]
+  tables     Table[]
+  categories Category[]
+  menuItems  MenuItem[]
+  customers  Customer[]
+  orders     Order[]
+  auditLogs  AuditLog[]
+
+  @@map("business_units")
+}
+
+// User Business Unit Assignment (Many-to-Many)
+model UserBusinessUnit {
+  id             String       @id @default(uuid())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id], onDelete: Cascade)
+  businessUnitId String
+  role           UserRole
+  isActive       Boolean      @default(true)
+  assignedAt     DateTime     @default(now())
+  assignedBy     String? // ID of user who assigned this
+
+  @@unique([userId, businessUnitId])
+  @@map("user_business_units")
+}
+
+// Customer Management
+model Customer {
+  id             String       @id @default(uuid())
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id])
+  businessUnitId String
+  customerNumber String       @unique // Human-readable customer number (e.g., "CUST-001")
+  firstName      String?
+  lastName       String?
+  email          String?
+  phone          String?
+  type           CustomerType @default(WALK_IN)
+  preferences    Json? // Dietary preferences, favorite items, etc.
+  allergies      String? // Food allergies
+  notes          String? // Staff notes about customer
+  isActive       Boolean      @default(true)
+  totalOrders    Int          @default(0)
+  totalSpent     Decimal      @default(0) @db.Decimal(10, 2)
+  lastVisit      DateTime?
+  firstVisit     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  orders Order[]
+
+  @@unique([businessUnitId, email])
+  @@unique([businessUnitId, phone])
+  @@map("customers")
+}
+
+enum CustomerType {
+  WALK_IN // One-time or infrequent customers
+  REGULAR // Frequent customers (visited 3+ times)
+  VIP // High-value customers
+}
+
+// User Management
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  name         String
+  passwordHash String // Hashed password
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  businessUnits    UserBusinessUnit[]
+  orders           Order[]
+  auditLogsCreated AuditLog[]         @relation("AuditLogUser")
+
+  @@map("users")
+}
+
+enum UserRole {
+  WAITER
+  KITCHEN_STAFF
+  BAR_STAFF
+  MANAGER
+  CASHIER
+}
+
+// Table Management
+model Table {
+  id             String       @id @default(uuid())
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id])
+  businessUnitId String
+  number         Int
+  capacity       Int
+  status         TableStatus  @default(AVAILABLE)
+  location       String? // Floor, section, etc.
+  isActive       Boolean      @default(true)
+
+  // Relations
+  orders Order[]
+
+  @@unique([businessUnitId, number]) // Table numbers are unique per business unit
+  @@map("tables")
+}
+
+enum TableStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  OUT_OF_ORDER
+}
+
+// Menu Categories
+model Category {
+  id             String       @id @default(uuid())
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id])
+  businessUnitId String
+  name           String
+  description    String?
+  sortOrder      Int          @default(0)
+  isActive       Boolean      @default(true)
+
+  // Relations
+  menuItems MenuItem[]
+
+  @@map("categories")
+}
+
+// Menu Items
+model MenuItem {
+  id             String       @id @default(uuid())
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id])
+  businessUnitId String
+  name           String
+  description    String?
+  price          Decimal      @db.Decimal(10, 2)
+  category       Category     @relation(fields: [categoryId], references: [id])
+  categoryId     String
+  type           ItemType // FOOD or DRINK
+  prepTime       Int? // estimated preparation time in minutes
+  isAvailable    Boolean      @default(true)
+  imageUrl       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  orderItems OrderItem[]
+
+  @@map("menu_items")
+}
+
+enum ItemType {
+  FOOD
+  DRINK
+}
+
+enum DiscountTier {
+  NONE // No discount
+  BRONZE // 5% discount
+  SILVER // 10% discount
+  GOLD // 15% discount
+  PLATINUM // 20% discount
+}
+
+enum LoyaltyTransactionType {
+  EARNED // Points earned from purchase
+  REDEEMED // Points redeemed for discount/reward
+  BONUS // Bonus points (birthday, anniversary, etc.)
+  EXPIRED // Points expired
+  ADJUSTED // Manual adjustment by staff
+}
+
+// Main Order
+model Order {
+  id             String      @id @default(uuid())
+  orderNumber    String      @unique // Human-readable order number (e.g., "ORD-001")
+  table          Table       @relation(fields: [tableId], references: [id])
+  tableId        String
+  waiter         User        @relation(fields: [waiterId], references: [id])
+  waiterId       String
+  customer       Customer?   @relation(fields: [customerId], references: [id])
+  customerId     String? // Optional - for walk-ins, this might be null
+  status         OrderStatus @default(PENDING)
+  totalAmount    Decimal     @default(0) @db.Decimal(10, 2)
+  discountAmount Decimal     @default(0) @db.Decimal(10, 2)
+  finalAmount    Decimal     @default(0) @db.Decimal(10, 2)
+  notes          String? // Special instructions
+  customerCount  Int? // Number of customers at table
+  isWalkIn       Boolean     @default(true) // True for walk-in, false for known customer
+  walkInName     String? // Name for walk-in customers (not stored in customer table)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  completedAt    DateTime?
+
+  // Relations
+  orderItems     OrderItem[]
+  BusinessUnit   BusinessUnit? @relation(fields: [businessUnitId], references: [id])
+  businessUnitId String?
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  PENDING // Just created, not sent to kitchen/bar yet
+  CONFIRMED // Confirmed by waiter, sent to kitchen/bar
+  IN_PROGRESS // Being prepared
+  READY // Ready to serve
+  SERVED // Served to customer
+  COMPLETED // Payment completed
+  CANCELLED // Cancelled
+}
+
+// Individual Order Items
+model OrderItem {
+  id         String          @id @default(uuid())
+  order      Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    String
+  menuItem   MenuItem        @relation(fields: [menuItemId], references: [id])
+  menuItemId String
+  quantity   Int
+  unitPrice  Decimal         @db.Decimal(10, 2)
+  totalPrice Decimal         @db.Decimal(10, 2)
+  status     OrderItemStatus @default(PENDING)
+  notes      String? // Special instructions for this item
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@map("order_items")
+}
+
+enum OrderItemStatus {
+  PENDING // Waiting to be processed
+  CONFIRMED // Sent to kitchen/bar
+  PREPARING // Being prepared
+  READY // Ready to serve
+  SERVED // Served to customer
+  CANCELLED // Cancelled
+}
+
+// Kitchen Orders (for food items)
+model KitchenOrder {
+  id            String             @id @default(uuid())
+  orderNumber   String // Reference to main order
+  tableNumber   Int
+  waiterName    String
+  items         Json // Serialized food items with quantities
+  status        KitchenOrderStatus @default(PENDING)
+  priority      OrderPriority      @default(NORMAL)
+  estimatedTime Int? // Estimated completion time in minutes
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  notes         String?
+
+  @@map("kitchen_orders")
+}
+
+enum KitchenOrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  READY
+  SERVED
+}
+
+// Bar Orders (for drink items)
+model BarOrder {
+  id            String         @id @default(uuid())
+  orderNumber   String // Reference to main order
+  tableNumber   Int
+  waiterName    String
+  items         Json // Serialized drink items with quantities
+  status        BarOrderStatus @default(PENDING)
+  priority      OrderPriority  @default(NORMAL)
+  estimatedTime Int? // Estimated completion time in minutes
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notes         String?
+
+  @@map("bar_orders")
+}
+
+enum BarOrderStatus {
+  PENDING
+  ACCEPTED
+  PREPARING
+  READY
+  SERVED
+}
+
+enum OrderPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+// Audit Log System
+model AuditLog {
+  id             String       @id @default(uuid())
+  businessUnit   BusinessUnit @relation(fields: [businessUnitId], references: [id])
+  businessUnitId String
+  tableName      String // Which table was affected
+  recordId       String // ID of the affected record
+  action         AuditAction // CREATE, UPDATE, DELETE
+  oldValues      Json? // Previous values (for UPDATE/DELETE)
+  newValues      Json? // New values (for CREATE/UPDATE)
+  user           User?        @relation("AuditLogUser", fields: [userId], references: [id])
+  userId         String? // Who performed the action (null for system actions)
+  ipAddress      String? // IP address of the user
+  userAgent      String? // Browser/device info
+  sessionId      String? // Session identifier
+  createdAt      DateTime     @default(now())
+
+  @@index([businessUnitId, tableName, recordId])
+  @@index([businessUnitId, userId])
+  @@index([businessUnitId, createdAt])
+  @@map("audit_logs")
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ACCESS_DENIED
+}
+
+// Order Status History for tracking
+model OrderStatusHistory {
+  id        String   @id @default(uuid())
+  orderId   String
+  status    String
+  changedBy String // User who changed the status
+  changedAt DateTime @default(now())
+  notes     String?
+
+  @@map("order_status_history")
+}
+
+// System Settings
+model Setting {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  value       String
+  description String?
+
+  @@map("settings")
+}
