@@ -26,13 +26,14 @@ model BusinessUnit {
   updatedAt DateTime @updatedAt
 
   // Relations
-  users      UserBusinessUnit[]
-  tables     Table[]
-  categories Category[]
-  menuItems  MenuItem[]
-  customers  Customer[]
-  orders     Order[]
-  auditLogs  AuditLog[]
+  users                UserBusinessUnit[]
+  tables               Table[]
+  categories           Category[]
+  menuItems            MenuItem[]
+  customers            Customer[]
+  orders               Order[]
+  auditLogs            AuditLog[]
+  userBusinessUnitRole UserBusinessUnitRole[]
 
   @@map("business_units")
 }
@@ -101,9 +102,11 @@ model User {
   updatedAt    DateTime @updatedAt
 
   // Relations
-  businessUnits    UserBusinessUnit[]
-  orders           Order[]
-  auditLogsCreated AuditLog[]         @relation("AuditLogUser")
+  businessUnits        UserBusinessUnit[]
+  orders               Order[]
+  auditLogsCreated     AuditLog[]             @relation("AuditLogUser")
+  userPermission       UserPermission[]
+  userBusinessUnitRole UserBusinessUnitRole[]
 
   @@map("users")
 }
@@ -381,4 +384,87 @@ model Setting {
   description String?
 
   @@map("settings")
+}
+
+model Role {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  displayName String
+  description String?
+  isSystem    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignments UserBusinessUnitRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model UserBusinessUnitRole {
+  userId         String
+  businessUnitId String
+  roleId         String
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessUnit BusinessUnit @relation(fields: [businessUnitId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  assignedAt DateTime @default(now())
+  assignedBy String?
+
+  @@id([userId, businessUnitId, roleId])
+  @@map("user_business_unit_roles")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model Permission {
+  id          String          @id @default(uuid())
+  name        String          @unique
+  displayName String
+  description String?
+  scope       PermissionScope @default(BUSINESS_UNIT)
+  module      String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+
+  @@index([module, scope])
+  @@map("permissions")
+}
+
+enum PermissionScope {
+  GLOBAL
+  BUSINESS_UNIT
+  DEPARTMENT
+}
+
+model UserPermission {
+  userId       String
+  permissionId String
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@id([userId, permissionId])
+  @@map("user_permissions")
 }
