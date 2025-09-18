@@ -106,9 +106,9 @@ function convertOrderDecimals<T extends { totalAmount: unknown; discountAmount: 
   }
 }
 
-// Generate order number based on business unit and sequential numbering
+// Generate simple incrementing order number with business unit code starting from 10001
 async function generateOrderNumber(businessUnitId: string): Promise<string> {
-  // Get business unit code for shorter identifier
+  // Get business unit code for prefix
   const businessUnit = await prisma.businessUnit.findUnique({
     where: { id: businessUnitId },
     select: { code: true }
@@ -117,33 +117,34 @@ async function generateOrderNumber(businessUnitId: string): Promise<string> {
   if (!businessUnit) {
     throw new Error("Business unit not found")
   }
-  
-  const today = new Date()
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
-  
+
   // Use transaction to safely get next sequence number
   const orderNumber = await prisma.$transaction(async (tx) => {
     const lastOrder = await tx.order.findFirst({
       where: {
         businessUnitId,
+        // Look for orders with the same business unit prefix
         orderNumber: {
-          startsWith: `${businessUnit.code}-${dateStr}`
+          startsWith: `${businessUnit.code}-`
         }
       },
       orderBy: {
-        orderNumber: 'desc'
+        createdAt: 'desc'
       }
     })
 
-    let sequence = 1
+    let nextNumber = 10001 // Starting number
+    
     if (lastOrder) {
-      // Extract sequence from order number like "REST001-20250101-001"
+      // Extract number from order number like "REST001-10001"
       const parts = lastOrder.orderNumber.split('-')
-      const lastSequence = parseInt(parts[parts.length - 1] || '0')
-      sequence = lastSequence + 1
+      if (parts.length === 2 && parts[1].match(/^\d+$/)) {
+        const lastNumber = parseInt(parts[1])
+        nextNumber = lastNumber + 1
+      }
     }
 
-    return `${businessUnit.code}-${dateStr}-${sequence.toString().padStart(3, '0')}`
+    return `${businessUnit.code}-${nextNumber.toString()}`
   })
 
   return orderNumber

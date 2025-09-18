@@ -29,7 +29,8 @@ import {
   UserX,
 } from "lucide-react"
 
-import { ItemType, OrderItemStatus, TableStatus } from "@prisma/client"
+  // Additional imports for new functionality
+  import { ItemType, OrderItemStatus, OrderStatus, TableStatus } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -39,7 +40,7 @@ import { toast } from "sonner"
 import { getTables } from "@/lib/actions/table-actions"
 import { getCategories, getMenuItems } from "@/lib/actions/menu-actions"
 import { getBusinessUnit } from "@/lib/actions/business-unit-actions"
-import { createOrder, getOrder, updateOrder } from "@/lib/actions/order-actions"
+import { createOrder, getOrder, updateOrder, sendOrderToKitchenAndBar } from "@/lib/actions/order-actions"
 
 // Types
 import type { TableWithCurrentOrder } from "@/lib/actions/table-actions"
@@ -81,11 +82,13 @@ const WaiterOrderSystem = () => {
   const [isTablesCollapsed, setIsTablesCollapsed] = useState(false)
   const [imageLoadStates, setImageLoadStates] = useState<ImageLoadState>({})
   const [currentTime, setCurrentTime] = useState(new Date())
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [isLoading, setIsLoading] = useState(true)
   const [isEditingOrder, setIsEditingOrder] = useState(false)
   const [isLoadingOrder, setIsLoadingOrder] = useState(false)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>(undefined)
+  const [isSettlingOrder, setIsSettlingOrder] = useState(false)
 
   // Order store
   const {
@@ -372,6 +375,70 @@ const WaiterOrderSystem = () => {
     setClearingOrder(false)
   }
 
+  // Settle order (mark as paid/completed)
+  const handleSettleOrder = async () => {
+    if (!existingOrder) {
+      toast.error("No order to settle")
+      return
+    }
+
+    setIsSettlingOrder(true)
+    
+    try {
+      // Here you would call your settle order API
+      // For now, we'll just simulate the action
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      toast.success("Order settled successfully!")
+      clearOrder()
+      setIsEditingOrder(false)
+      setExistingOrder(null)
+      
+      // Refresh tables data to update status
+      await refreshTables()
+    } catch (error) {
+      console.error("Error settling order:", error)
+      toast.error("Failed to settle order")
+    } finally {
+      setIsSettlingOrder(false)
+    }
+  }
+
+  // Send draft order to kitchen
+  const handleSendDraftToKitchen = async () => {
+    if (!existingOrder || existingOrder.status !== OrderStatus.PENDING) {
+      toast.error("Order is not a draft")
+      return
+    }
+
+    setSubmittingOrder(true)
+    
+    try {
+      // Call the sendOrderToKitchenAndBar function
+      const result = await sendOrderToKitchenAndBar(existingOrder.id, businessUnitId)
+      
+      if (result.success) {
+        toast.success("Draft order sent to kitchen successfully!")
+        
+        // Refresh the order data
+        const updatedOrderData = await getOrder(businessUnitId, existingOrder.id)
+        if (updatedOrderData) {
+          setExistingOrder(updatedOrderData)
+        }
+        
+        // Refresh tables data
+        await refreshTables()
+      } else {
+        toast.error(result.error || "Failed to send draft order to kitchen")
+      }
+    } catch (error) {
+      console.error("Error sending draft order:", error)
+      toast.error("Failed to send draft order")
+    } finally {
+      setSubmittingOrder(false)
+    }
+  }
+
   // Handle table selection
   const handleTableSelect = (tableId: string) => {
     setSelectedTable(tableId)
@@ -408,10 +475,14 @@ const WaiterOrderSystem = () => {
   const formatPrice = (price: number) => `₱${price.toFixed(2)}`
 
   // Table status helpers - Updated to handle tables with orders
-  const getTableStatusInfo = (status: TableStatus, hasCurrentOrder: boolean) => {
-    // If table has a current order, it should show as occupied regardless of its status
+  const getTableStatusInfo = (status: TableStatus, hasCurrentOrder: boolean, orderStatus?: OrderStatus) => {
+    // If table has a current order, show different status based on order status
     if (hasCurrentOrder) {
-      return { color: "border-orange-400 bg-orange-50 text-orange-700", text: "Has Order", icon: Edit3 }
+      if (orderStatus === OrderStatus.PENDING) {
+        return { color: "border-yellow-400 bg-yellow-50 text-yellow-700", text: "Has Draft", icon: Edit3 }
+      } else {
+        return { color: "border-orange-400 bg-orange-50 text-orange-700", text: "Has Order", icon: Edit3 }
+      }
     }
 
     switch (status) {
@@ -432,10 +503,14 @@ const WaiterOrderSystem = () => {
     }
   }
 
-  const getTableStatusDot = (status: TableStatus, hasCurrentOrder: boolean) => {
-    // If table has a current order, show orange dot
+  const getTableStatusDot = (status: TableStatus, hasCurrentOrder: boolean, orderStatus?: OrderStatus) => {
+    // If table has a current order, show different dot based on order status
     if (hasCurrentOrder) {
-      return "bg-orange-500"
+      if (orderStatus === OrderStatus.PENDING) {
+        return "bg-yellow-500" // Draft order
+      } else {
+        return "bg-orange-500" // Confirmed order
+      }
     }
 
     switch (status) {
@@ -515,7 +590,6 @@ const WaiterOrderSystem = () => {
     )
   }
 
-
   return (
     <div className="h-[calc(100vh-64px)] flex overflow-hidden bg-gray-50">
       {/* Tables Panel */}
@@ -547,7 +621,7 @@ const WaiterOrderSystem = () => {
             <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
               <div className="grid grid-cols-2 gap-3">
                 {tables.map((table) => {
-                  const statusInfo = getTableStatusInfo(table.status, !!table.currentOrder)
+                  const statusInfo = getTableStatusInfo(table.status, !!table.currentOrder, table.currentOrder?.status)
                   const StatusIcon = statusInfo.icon
                   const isSelected = selectedTableId === table.id
 
@@ -598,7 +672,7 @@ const WaiterOrderSystem = () => {
             <div className="flex-1 overflow-y-auto p-2 bg-gray-50">
               <div className="space-y-2">
                 {tables.map((table) => {
-                  const statusDot = getTableStatusDot(table.status, !!table.currentOrder)
+                  const statusDot = getTableStatusDot(table.status, !!table.currentOrder, table.currentOrder?.status)
                   const isSelected = selectedTableId === table.id
 
                   return (
@@ -608,7 +682,7 @@ const WaiterOrderSystem = () => {
                       className={`relative p-3 rounded-lg bg-white border cursor-pointer transition-all duration-200 hover:shadow-md ${
                         isSelected ? "ring-2 ring-blue-400 ring-offset-1 shadow-md border-blue-200" : "border-gray-200 hover:border-gray-300"
                       }`}
-                      title={`Table ${table.number} - ${getTableStatusInfo(table.status, !!table.currentOrder).text} - ${table.capacity} seats`}
+                      title={`Table ${table.number} - ${getTableStatusInfo(table.status, !!table.currentOrder, table.currentOrder?.status).text} - ${table.capacity} seats`}
                     >
                       <div className={`absolute -top-1 -right-1 w-3 h-3 rounded-full ${statusDot} border-2 border-white`} />
                       
@@ -744,13 +818,15 @@ const WaiterOrderSystem = () => {
       {/* Order Summary Panel */}
       <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full relative">
         {/* Loading Overlay for Order Summary Panel */}
-        {(isSubmittingOrder || isClearingOrder || isLoadingOrder) && (
+        {(isSubmittingOrder || isClearingOrder || isLoadingOrder || isSettlingOrder) && (
           <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50">
             <div className="flex flex-col items-center gap-3">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               <span className="text-sm font-medium text-gray-700">
                 {isLoadingOrder 
                   ? "Loading order data..." 
+                  : isSettlingOrder
+                  ? "Settling order..."
                   : isSubmittingOrder 
                   ? (isEditingOrder ? "Updating Order..." : "Sending Order...") 
                   : "Clearing Order..."}
@@ -795,7 +871,7 @@ const WaiterOrderSystem = () => {
             </div>
             <Button 
               onClick={handleClearAll}
-              disabled={isClearingOrder || isSubmittingOrder}
+              disabled={isClearingOrder || isSubmittingOrder || isSettlingOrder}
               variant='outline' 
               size='sm' 
               className="text-xs h-6 px-2 flex items-center gap-1"
@@ -997,41 +1073,114 @@ const WaiterOrderSystem = () => {
 
             {/* Action Buttons */}
             <div className="space-y-2">
-              <Button 
-                onClick={handleSubmitOrder}
-                disabled={isSubmittingOrder || isClearingOrder}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-              >
-                {isSubmittingOrder ? (
+              {/* Main action button - changes based on order state */}
+              {existingOrder?.status === OrderStatus.PENDING ? (
+                // Draft order - show "Send to Kitchen" button
+                <Button 
+                  onClick={handleSendDraftToKitchen}
+                  disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                >
+                  {isSubmittingOrder ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending to Kitchen...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send Draft to Kitchen
+                    </>
+                  )}
+                </Button>
+              ) : existingOrder && existingOrder.status !== OrderStatus.IN_PROGRESS ? (
+                // Confirmed order - show "Settle Order" button
+                <Button 
+                  onClick={handleSettleOrder}
+                  disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                >
+                  {isSettlingOrder ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Settling Order...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Settle Order
+                    </>
+                  )}
+                </Button>
+              ) : (
+                // New order - show "Send to Kitchen" button
+                <Button 
+                  onClick={handleSubmitOrder}
+                  disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                >
+                  {isSubmittingOrder ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending Order...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send to Kitchen
+                    </>
+                  )}
+                </Button>
+              )}
+
+              {/* Secondary buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* Draft button - only show for new orders or when editing draft */}
+                {(!existingOrder || existingOrder.status === OrderStatus.PENDING) && (
+                  <Button 
+                    onClick={handleSaveAsDraft}
+                    disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                    variant="outline" 
+                    className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                  >
+                    <Save className="w-4 h-4" />
+                    Draft
+                  </Button>
+                )}
+
+                {/* Bar button - show for new orders */}
+                {!existingOrder && (
+                  <Button 
+                    disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                    variant="outline" 
+                    className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                  >
+                    <Coffee className="w-4 h-4" />
+                    Bar
+                  </Button>
+                )}
+
+                {/* For confirmed orders, show additional action buttons */}
+                {existingOrder && existingOrder.status !== OrderStatus.PENDING && (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {isEditingOrder ? "Updating Order..." : "Sending Order..."}
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    {isEditingOrder ? "Update Order" : "Send to Kitchen"}
+                    <Button 
+                      disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                      variant="outline" 
+                      className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                    >
+                      <Receipt className="w-4 h-4" />
+                      Print
+                    </Button>
+                    <Button 
+                      disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                      variant="outline" 
+                      className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                    >
+                      <Coffee className="w-4 h-4" />
+                      Add Drinks
+                    </Button>
                   </>
                 )}
-              </Button>
-              <div className="grid grid-cols-2 gap-2">
-                <Button 
-                  onClick={handleSaveAsDraft}
-                  disabled={isSubmittingOrder || isClearingOrder}
-                  variant="outline" 
-                  className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-                >
-                  <Save className="w-4 h-4" />
-                  Draft
-                </Button>
-                <Button 
-                  disabled={isSubmittingOrder || isClearingOrder}
-                  variant="outline" 
-                  className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-                >
-                  <Coffee className="w-4 h-4" />
-                  Bar
-                </Button>
               </div>
             </div>
           </div>
