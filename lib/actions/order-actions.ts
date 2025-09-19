@@ -678,6 +678,318 @@ export async function getOrder(businessUnitId: string, orderId: string): Promise
   }
 }
 
+// Add items to existing order
+export async function addItemsToOrder(
+  businessUnitId: string,
+  orderId: string,
+  items: CreateOrderItemInput[]
+) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      throw new Error("Unauthorized")
+    }
+
+    // Validate order exists and can be modified
+    const existingOrder = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        businessUnitId,
+        status: { in: [OrderStatus.CONFIRMED, OrderStatus.IN_PROGRESS, OrderStatus.READY] }
+      },
+      include: {
+        orderItems: {
+          include: {
+            menuItem: true
+          }
+        }
+      }
+    })
+
+    if (!existingOrder) {
+      throw new Error("Order not found or cannot be modified")
+    }
+
+    // Validate menu items
+    const menuItemIds = items.map(item => item.menuItemId)
+    const menuItems = await prisma.menuItem.findMany({
+      where: {
+        id: { in: menuItemIds },
+        businessUnitId,
+        isAvailable: true
+      }
+    })
+
+    if (menuItems.length !== menuItemIds.length) {
+      throw new Error("Some menu items are not available")
+    }
+
+    // Calculate additional amount
+    let additionalAmount = 0
+    const newOrderItemsData = items.map(item => {
+      const menuItem = menuItems.find(mi => mi.id === item.menuItemId)!
+      const itemTotal = Number(menuItem.price) * item.quantity
+      additionalAmount += itemTotal
+
+      return {
+        orderId,
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+        unitPrice: menuItem.price,
+        totalPrice: itemTotal,
+        status: OrderItemStatus.CONFIRMED,
+        notes: item.notes
+      }
+    })
+
+    // Update order with new items
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      // Add new order items
+      await tx.orderItem.createMany({
+        data: newOrderItemsData
+      })
+
+      // Update order totals
+      const newTotalAmount = Number(existingOrder.totalAmount) + additionalAmount
+      const newFinalAmount = Number(existingOrder.finalAmount) + additionalAmount
+
+      return await tx.order.update({
+        where: { id: orderId },
+        data: {
+          totalAmount: newTotalAmount,
+          finalAmount: newFinalAmount,
+          updatedAt: new Date()
+        },
+        include: {
+          table: {
+            select: {
+              id: true,
+              number: true,
+              capacity: true,
+              location: true
+            }
+          },
+          customer: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true
+            }
+          },
+          orderItems: {
+            include: {
+              menuItem: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  price: true,
+                  type: true,
+                  prepTime: true,
+                  imageUrl: true
+                }
+              }
+            }
+          }
+        }
+      })
+    })
+
+    // Send new items to kitchen/bar
+    await sendAdditionalItemsToKitchenAndBar(orderId, businessUnitId, items)
+
+    // Convert and return
+    const convertedOrder = convertOrderDecimals(updatedOrder)
+    const finalOrder = {
+      ...convertedOrder,
+      table: {
+        ...updatedOrder.table,
+        location: updatedOrder.table.location ?? undefined
+      },
+      customer: updatedOrder.customer ? {
+        ...updatedOrder.customer,
+        firstName: updatedOrder.customer.firstName ?? undefined,
+        lastName: updatedOrder.customer.lastName ?? undefined,
+        email: updatedOrder.customer.email ?? undefined,
+        phone: updatedOrder.customer.phone ?? undefined
+      } : undefined,
+      orderItems: updatedOrder.orderItems?.map(item => {
+        const convertedItem = convertOrderItemDecimal(item)
+        return {
+          ...convertedItem,
+          notes: convertedItem.notes ?? undefined,
+          menuItem: {
+            ...convertDecimalToNumber(item.menuItem),
+            description: item.menuItem.description ?? undefined,
+            prepTime: item.menuItem.prepTime ?? undefined,
+            imageUrl: item.menuItem.imageUrl ?? undefined
+          }
+        }
+      }) ?? []
+    }
+
+    revalidatePath(`/${businessUnitId}`)
+    return { success: true, order: finalOrder }
+  } catch (error) {
+    console.error("Error adding items to order:", error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Failed to add items to order" 
+    }
+  }
+}
+
+// Send additional items to kitchen and bar
+async function sendAdditionalItemsToKitchenAndBar(
+  orderId: string, 
+  businessUnitId: string, 
+  items: CreateOrderItemInput[]
+) {
+  try {
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        businessUnitId
+      },
+      include: {
+        table: true,
+        waiter: true,
+        orderItems: {
+          where: {
+            menuItemId: { in: items.map(i => i.menuItemId) }
+          },
+          include: {
+            menuItem: true
+          },
+          orderBy: {
+            createdAt: 'desc'
+          }
+        }
+      }
+    })
+
+    if (!order) {
+      throw new Error("Order not found")
+    }
+
+    // Get only the newly added items
+    const newItems = order.orderItems.filter(orderItem => 
+      items.some(item => item.menuItemId === orderItem.menuItemId)
+    )
+
+    // Separate food and drink items
+    const foodItems = newItems.filter(item => item.menuItem.type === ItemType.FOOD)
+    const drinkItems = newItems.filter(item => item.menuItem.type === ItemType.DRINK)
+
+    // Create additional kitchen order for food items
+    if (foodItems.length > 0) {
+      const kitchenItems = foodItems.map(item => ({
+        id: item.id,
+        name: item.menuItem.name,
+        quantity: item.quantity,
+        notes: item.notes,
+        prepTime: item.menuItem.prepTime
+      }))
+
+      await prisma.kitchenOrder.create({
+        data: {
+          orderNumber: `${order.orderNumber}-ADD`,
+          tableNumber: order.table.number,
+          waiterName: order.waiter.name,
+          items: kitchenItems,
+          status: KitchenOrderStatus.PENDING,
+          priority: OrderPriority.NORMAL,
+          estimatedTime: Math.max(...foodItems.map(item => item.menuItem.prepTime || 15)),
+          notes: `Additional items for ${order.orderNumber}`
+        }
+      })
+    }
+
+    // Create additional bar order for drink items
+    if (drinkItems.length > 0) {
+      const barItems = drinkItems.map(item => ({
+        id: item.id,
+        name: item.menuItem.name,
+        quantity: item.quantity,
+        notes: item.notes,
+        prepTime: item.menuItem.prepTime
+      }))
+
+      await prisma.barOrder.create({
+        data: {
+          orderNumber: `${order.orderNumber}-ADD`,
+          tableNumber: order.table.number,
+          waiterName: order.waiter.name,
+          items: barItems,
+          status: BarOrderStatus.PENDING,
+          priority: OrderPriority.NORMAL,
+          estimatedTime: Math.max(...drinkItems.map(item => item.menuItem.prepTime || 5)),
+          notes: `Additional items for ${order.orderNumber}`
+        }
+      })
+    }
+
+    return { success: true }
+  } catch (error) {
+    console.error("Error sending additional items:", error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Failed to send additional items" 
+    }
+  }
+}
+
+// Complete order and free table
+export async function completeOrder(businessUnitId: string, orderId: string) {
+  try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      throw new Error("Unauthorized")
+    }
+
+    const order = await prisma.order.findFirst({
+      where: {
+        id: orderId,
+        businessUnitId,
+        status: { in: [OrderStatus.READY, OrderStatus.SERVED] }
+      }
+    })
+
+    if (!order) {
+      throw new Error("Order not found or cannot be completed")
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Update order status to completed
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: OrderStatus.COMPLETED,
+          completedAt: new Date(),
+          updatedAt: new Date()
+        }
+      })
+
+      // Update table status to available
+      await tx.table.update({
+        where: { id: order.tableId },
+        data: { status: TableStatus.AVAILABLE }
+      })
+    })
+
+    revalidatePath(`/${businessUnitId}`)
+    return { success: true }
+  } catch (error) {
+    console.error("Error completing order:", error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Failed to complete order" 
+    }
+  }
+}
+
 // Cancel order
 export async function cancelOrder(businessUnitId: string, orderId: string) {
   try {
