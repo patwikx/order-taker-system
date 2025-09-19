@@ -156,6 +156,8 @@ model Category {
 
   // Relations
   menuItems MenuItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   @@map("categories")
 }

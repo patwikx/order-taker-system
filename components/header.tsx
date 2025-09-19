@@ -73,7 +73,7 @@ const navigation: NavItem[] = [
     title: "Tables & Service",
     icon: Utensils,
     children: [
-      { title: "Table Management", href: "/tables", icon: Utensils, roles: ["WAITER", "MANAGER"] },
+      { title: "Table Management", href: "/admin/tables", icon: Utensils, roles: ["WAITER", "MANAGER"] },
       { title: "Reservations", href: "/reservations", icon: Calendar, roles: ["WAITER", "MANAGER"] },
       { title: "Customer Walk-ins", href: "/customers/walkins", icon: Users, roles: ["WAITER", "MANAGER"] },
     ],
@@ -82,7 +82,7 @@ const navigation: NavItem[] = [
     title: "Menu Management",
     icon: BookOpen,
     children: [
-      { title: "Menu Items", href: "/menu/items", icon: Package, roles: ["MANAGER"] },
+      { title: "Menu Items", href: "/menu/menu-items", icon: Package, roles: ["MANAGER"] },
       { title: "Categories", href: "/menu/categories", icon: FileText, roles: ["MANAGER"] },
       { title: "Pricing", href: "/menu/pricing", icon: TrendingUp, roles: ["MANAGER"] },
       { title: "Specials", href: "/menu/specials", icon: Sparkles, roles: ["MANAGER"] },
