@@ -281,6 +281,7 @@ model KitchenOrder {
   status        KitchenOrderStatus @default(PENDING)
   priority      OrderPriority      @default(NORMAL)
   estimatedTime Int? // Estimated completion time in minutes
+  pickedUpAt    DateTime?
   startedAt     DateTime?
   completedAt   DateTime?
   createdAt     DateTime           @default(now())

@@ -170,7 +170,8 @@ export const MenuPanel = memo(({
 
   return (
     <div className="flex-1 bg-white flex flex-col min-w-0">
-      <div className="p-4 border-b bg-gray-50">
+      {/* Header Section */}
+      <div className="p-4 border-b bg-gradient-to-r from-green-50 to-blue-50">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 rounded-lg">
@@ -198,37 +199,72 @@ export const MenuPanel = memo(({
             </Button>
           </div>
         </div>
+      </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {categories.map((category) => (
-            <Button
-              key={category.id}
-              onClick={() => onCategorySelect(category.name)}
-              size="sm"
-              className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition-all duration-200 ${
-                selectedCategory === category.name
-                  ? "bg-blue-600 text-white shadow-md"
-                  : "bg-white text-gray-700 hover:bg-gray-100 border"
-              }`}
-            >
-              {category.name}
-            </Button>
-          ))}
+      {/* Category Tabs - Improved Design */}
+      <div className="bg-white border-b shadow-sm">
+        <div className="px-4 py-3">
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+            {categories.map((category, index) => (
+              <button
+                key={category.id}
+                onClick={() => onCategorySelect(category.name)}
+                className={`relative px-4 py-2.5 text-sm font-medium whitespace-nowrap rounded-lg transition-all duration-200 flex-shrink-0 ${
+                  selectedCategory === category.name
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                } ${index === 0 ? "ml-0" : "ml-1"}`}
+              >
+                <span>{category.name}</span>
+                {selectedCategory === category.name && (
+                  <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full shadow-sm"></div>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+          
+          {/* Category Indicator Line */}
+          <div className="mt-2 h-0.5 bg-gradient-to-r from-blue-200 via-blue-400 to-blue-200 rounded-full opacity-30"></div>
         </div>
       </div>
 
       {/* Menu Items */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-5 gap-3">
-          {filteredMenuItems.map((item) => (
-            <MenuItem
-              key={item.id}
-              item={item}
-              isAdding={addingItemId === item.id}
-              onAddToOrder={onAddToOrder}
-            />
-          ))}
-        </div>
+      <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+        {filteredMenuItems.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Utensils className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No items found</h3>
+            <p className="text-gray-500">
+              {searchQuery 
+                ? `No menu items match "${searchQuery}" in ${selectedCategory}`
+                : `No items available in ${selectedCategory} category`}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Category Info */}
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">{selectedCategory}</h3>
+              <p className="text-sm text-gray-600">{filteredMenuItems.length} item{filteredMenuItems.length !== 1 ? 's' : ''} available</p>
+            </div>
+            
+            {/* Items Grid */}
+            <div className="grid grid-cols-5 gap-3">
+              {filteredMenuItems.map((item) => (
+                <MenuItem
+                  key={item.id}
+                  item={item}
+                  isAdding={addingItemId === item.id}
+                  onAddToOrder={onAddToOrder}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )

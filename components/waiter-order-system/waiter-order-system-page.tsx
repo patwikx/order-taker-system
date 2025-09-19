@@ -97,6 +97,7 @@ const WaiterOrderSystem = ({ businessUnitId, initialData }: Props) => {
     clearOrder,
     setSubmittingOrder,
     setClearingOrder,
+    loadExistingOrderItems, // Add this new function
     getSubtotal,
     getTax,
     getTotal,
@@ -128,61 +129,68 @@ const WaiterOrderSystem = ({ businessUnitId, initialData }: Props) => {
     }
   }, [selectedTableId, setSelectedTable, initialData.tables])
 
-  // Load existing order when table changes - optimized with useCallback
-  const loadExistingOrder = useCallback(async (tableId: string) => {
-    const selectedTable = tables.find(t => t.id === tableId)
-    if (!selectedTable?.currentOrder) {
-      setExistingOrder(null)
-      setUIState(prev => ({ ...prev, isEditingOrder: false }))
-      clearOrder()
-      setCustomerInfo(undefined, true, undefined)
-      setUIState(prev => ({ ...prev, selectedCustomerId: undefined }))
-      setCustomerCount(1)
-      setOrderNotes("")
-      return
-    }
+ // Load existing order when table changes - FIXED VERSION
+const loadExistingOrder = useCallback(async (tableId: string) => {
+  const selectedTable = tables.find(t => t.id === tableId)
+  
+  // Always clear the order first to prevent stale data
+  clearOrder()
+  setExistingOrder(null)
+  setUIState(prev => ({ ...prev, isEditingOrder: false }))
+  
+  if (!selectedTable?.currentOrder) {
+    // Reset all customer info for available tables
+    setCustomerInfo(undefined, true, undefined)
+    setUIState(prev => ({ ...prev, selectedCustomerId: undefined }))
+    setCustomerCount(1)
+    setOrderNotes("")
+    return
+  }
 
-    try {
-      setUIState(prev => ({ ...prev, isLoadingOrder: true }))
-      const orderData = await getOrder(businessUnitId, selectedTable.currentOrder.id)
+  try {
+    setUIState(prev => ({ ...prev, isLoadingOrder: true }))
+    const orderData = await getOrder(businessUnitId, selectedTable.currentOrder.id)
+    
+    if (orderData) {
+      setExistingOrder(orderData)
+      setUIState(prev => ({ ...prev, isEditingOrder: true }))
       
-      if (orderData) {
-        setExistingOrder(orderData)
-        setUIState(prev => ({ ...prev, isEditingOrder: true }))
-        
-        // Load existing order items into store
-        clearOrder()
-        orderData.orderItems.forEach(item => {
-          for (let i = 0; i < item.quantity; i++) {
-            addToOrder({
-              id: item.menuItem.id,
-              name: item.menuItem.name,
-              description: item.menuItem.description,
-              price: item.menuItem.price,
-              type: item.menuItem.type,
-              prepTime: item.menuItem.prepTime,
-              imageUrl: item.menuItem.imageUrl,
-            })
-          }
-        })
-        
-        // Set customer info
-        setCustomerInfo(
-          orderData.customerId || undefined,
-          orderData.isWalkIn,
-          orderData.walkInName || undefined
-        )
-        setUIState(prev => ({ ...prev, selectedCustomerId: orderData.customerId || undefined }))
-        setCustomerCount(orderData.customerCount || 1)
-        setOrderNotes(orderData.notes || "")
-      }
-    } catch (error) {
-      console.error("Error loading existing order:", error)
-      toast.error("Failed to load existing order")
-    } finally {
-      setUIState(prev => ({ ...prev, isLoadingOrder: false }))
+      // Convert orderData.orderItems to the format expected by loadExistingOrderItems
+      const existingItems = orderData.orderItems.map(item => ({
+        menuItem: {
+          id: item.menuItem.id,
+          name: item.menuItem.name,
+          description: item.menuItem.description,
+          price: item.menuItem.price,
+          type: item.menuItem.type,
+          prepTime: item.menuItem.prepTime,
+          imageUrl: item.menuItem.imageUrl,
+        },
+        quantity: item.quantity,
+        status: item.status,
+        notes: item.notes
+      }))
+      
+      // Load items directly without triggering addToOrder logic
+      loadExistingOrderItems(existingItems)
+      
+      // Set customer info
+      setCustomerInfo(
+        orderData.customerId || undefined,
+        orderData.isWalkIn,
+        orderData.walkInName || undefined
+      )
+      setUIState(prev => ({ ...prev, selectedCustomerId: orderData.customerId || undefined }))
+      setCustomerCount(orderData.customerCount || 1)
+      setOrderNotes(orderData.notes || "")
     }
-  }, [tables, businessUnitId, clearOrder, addToOrder, setCustomerInfo, setCustomerCount, setOrderNotes])
+  } catch (error) {
+    console.error("Error loading existing order:", error)
+    toast.error("Failed to load existing order")
+  } finally {
+    setUIState(prev => ({ ...prev, isLoadingOrder: false }))
+  }
+}, [tables, businessUnitId, clearOrder, loadExistingOrderItems, setCustomerInfo, setCustomerCount, setOrderNotes])
 
   // Effect for loading order when table changes
   useEffect(() => {
@@ -224,38 +232,56 @@ const WaiterOrderSystem = ({ businessUnitId, initialData }: Props) => {
     updateUIState('addingItemId', null)
   }, [addToOrder, updateUIState])
 
-  // Add more items to existing order
-  const handleAddMoreItems = useCallback(async () => {
-    if (!existingOrder || orderItems.length === 0) {
-      toast.error("No items to add")
-      return
-    }
+  // Updated handleAddMoreItems function for waiter-order-system-page.tsx
 
-    setSubmittingOrder(true)
+  const handleWalkInNameChange = useCallback((name: string) => {
+  setCustomerInfo(uiState.selectedCustomerId, isWalkIn, name)
+}, [setCustomerInfo, uiState.selectedCustomerId, isWalkIn])
+// Replace the existing handleAddMoreItems function with this:
+
+const handleAddMoreItems = useCallback(async () => {
+  if (!existingOrder) {
+    toast.error("No existing order found")
+    return
+  }
+
+  // Filter to only get NEW items (not existing items from the order)
+  const newItemsOnly = orderItems.filter(item => !item.isExistingItem)
+  
+  if (newItemsOnly.length === 0) {
+    toast.error("No new items to add")
+    return
+  }
+
+  setSubmittingOrder(true)
+  
+  try {
+    const itemsToAdd = newItemsOnly.map(item => ({
+      menuItemId: item.menuItem.id,
+      quantity: item.quantity,
+      notes: item.notes
+    }))
+
+    const result = await addItemsToOrder(businessUnitId, existingOrder.id, itemsToAdd)
     
-    try {
-      const itemsToAdd = orderItems.map(item => ({
-        menuItemId: item.menuItem.id,
-        quantity: item.quantity,
-        notes: item.notes
-      }))
-
-      const result = await addItemsToOrder(businessUnitId, existingOrder.id, itemsToAdd)
+    if (result.success) {
+      toast.success(`${newItemsOnly.length} new item(s) added to order successfully!`)
       
-      if (result.success) {
-        toast.success("Items added to order successfully!")
-        clearOrder()
-        await refreshTables()
-      } else {
-        toast.error(result.error || "Failed to add items to order")
-      }
-    } catch (error) {
-      console.error("Error adding items to order:", error)
-      toast.error("Failed to add items to order")
-    } finally {
-      setSubmittingOrder(false)
+      // Clear only the NEW items, keep existing items in the UI
+      // Or you can reload the entire order to show the updated state
+      await loadExistingOrder(selectedTableId!)
+      
+      await refreshTables()
+    } else {
+      toast.error(result.error || "Failed to add items to order")
     }
-  }, [existingOrder, orderItems, businessUnitId, clearOrder, refreshTables, setSubmittingOrder])
+  } catch (error) {
+    console.error("Error adding items to order:", error)
+    toast.error("Failed to add items to order")
+  } finally {
+    setSubmittingOrder(false)
+  }
+}, [existingOrder, orderItems, businessUnitId, loadExistingOrder, selectedTableId, refreshTables, setSubmittingOrder])
 
   // Submit order - optimized
   const handleSubmitOrder = useCallback(async () => {
@@ -458,6 +484,7 @@ const WaiterOrderSystem = ({ businessUnitId, initialData }: Props) => {
         orderItems={orderItems}
         isWalkIn={isWalkIn}
         walkInName={walkInName}
+        onWalkInNameChange={handleWalkInNameChange}
         customerCount={customerCount}
         orderNotes={orderNotes}
         isEditingOrder={uiState.isEditingOrder}

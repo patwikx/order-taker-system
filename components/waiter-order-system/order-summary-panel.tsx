@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client"
 
-import { memo, useCallback } from "react"
+import { memo, useCallback, useState } from "react"
 import { 
   ShoppingCart, 
   Clock, 
@@ -15,7 +15,9 @@ import {
   Save, 
   Coffee, 
   CheckCircle2, 
-  Loader2 
+  Loader2,
+  ChevronDown,
+  ChevronUp 
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,6 +50,7 @@ interface OrderSummaryPanelProps {
   onCustomerTypeChange: (isWalkIn: boolean) => void
   onCustomerCountChange: (count: number) => void
   onOrderNotesChange: (notes: string) => void
+  onWalkInNameChange: (name: string) => void // Added this prop
   onUpdateQuantity: (itemId: string, change: number) => void
   onRemoveFromOrder: (itemId: string) => void
   onSubmitOrder: () => void
@@ -102,6 +105,8 @@ const getItemStatusInfo = (status: OrderItemStatus) => {
   switch (status) {
     case OrderItemStatus.PENDING:
       return { color: "bg-yellow-100 text-yellow-800", text: "Pending", icon: Clock }
+    case OrderItemStatus.CONFIRMED:
+      return { color: "bg-blue-100 text-blue-800", text: "Confirmed", icon: CheckCircle2 }
     case OrderItemStatus.PREPARING:
       return { color: "bg-blue-100 text-blue-800", text: "Preparing", icon: Clock }
     case OrderItemStatus.READY:
@@ -127,7 +132,11 @@ const OrderItem = memo(({
   const formatPrice = useCallback((price: number) => `₱${price.toFixed(2)}`, [])
 
   return (
-    <div className="bg-gray-50 rounded-lg p-2.5 border">
+    <div className={`rounded-lg p-2.5 border ${
+      item.isExistingItem 
+        ? 'bg-blue-50 border-blue-200' // Blue background for existing items
+        : 'bg-gray-50 border-gray-200'  // Gray background for new items
+    }`}>
       <div className="flex gap-2.5 mb-2">
         {/* Item Image */}
         <div className="w-12 h-12 bg-gray-100 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
@@ -144,8 +153,20 @@ const OrderItem = memo(({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between">
             <div className="flex-1 min-w-0">
-              <h4 className="font-medium text-gray-900 text-sm truncate">{item.menuItem.name}</h4>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h4 className="font-medium text-gray-900 text-sm truncate">{item.menuItem.name}</h4>
+                {item.isExistingItem && (
+                  <span className="bg-blue-600 text-white px-1.5 py-0.5 rounded-full text-xs font-medium">
+                    Existing
+                  </span>
+                )}
+                {!item.isExistingItem && (
+                  <span className="bg-green-600 text-white px-1.5 py-0.5 rounded-full text-xs font-medium">
+                    New
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
                 <span
                   className={`px-1.5 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 ${statusInfo.color}`}
                 >
@@ -174,25 +195,46 @@ const OrderItem = memo(({
         <div className="flex items-center gap-2">
           <button
             onClick={() => onUpdateQuantity(item.id, -1)}
-            className="w-6 h-6 bg-white border border-gray-300 rounded flex items-center justify-center hover:bg-gray-50 transition-colors"
+            disabled={item.isExistingItem} // Disable quantity changes for existing items
+            className={`w-6 h-6 border border-gray-300 rounded flex items-center justify-center transition-colors ${
+              item.isExistingItem 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-white hover:bg-gray-50'
+            }`}
           >
             <Minus className="w-3 h-3" />
           </button>
           <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
           <button
             onClick={() => onUpdateQuantity(item.id, 1)}
-            className="w-6 h-6 bg-white border border-gray-300 rounded flex items-center justify-center hover:bg-gray-50 transition-colors"
+            disabled={item.isExistingItem} // Disable quantity changes for existing items
+            className={`w-6 h-6 border border-gray-300 rounded flex items-center justify-center transition-colors ${
+              item.isExistingItem 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-white hover:bg-gray-50'
+            }`}
           >
             <Plus className="w-3 h-3" />
           </button>
         </div>
         <button 
           onClick={() => onRemoveFromOrder(item.id)}
-          className="p-1.5 text-red-500 hover:bg-red-50 rounded-md"
+          disabled={item.isExistingItem} // Disable removal for existing items
+          className={`p-1.5 rounded-md transition-colors ${
+            item.isExistingItem 
+              ? 'text-gray-400 cursor-not-allowed' 
+              : 'text-red-500 hover:bg-red-50'
+          }`}
         >
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
+      
+      {item.isExistingItem && (
+        <div className="mt-2 text-xs text-blue-600 bg-blue-100 rounded px-2 py-1">
+          This item is from the existing order and cannot be modified here
+        </div>
+      )}
     </div>
   )
 })
@@ -220,6 +262,7 @@ export const OrderSummaryPanel = memo(({
   onCustomerTypeChange,
   onCustomerCountChange,
   onOrderNotesChange,
+  onWalkInNameChange, // Added this prop
   onUpdateQuantity,
   onRemoveFromOrder,
   onSubmitOrder,
@@ -230,6 +273,7 @@ export const OrderSummaryPanel = memo(({
   onAddMoreItems
 }: OrderSummaryPanelProps) => {
   const formatPrice = useCallback((price: number) => `₱${price.toFixed(2)}`, [])
+  const [isCustomerInfoCollapsed, setIsCustomerInfoCollapsed] = useState(false)
 
   // Use the calculation functions from the store instead of manual calculation
   const subtotal = getSubtotal()
@@ -241,6 +285,9 @@ export const OrderSummaryPanel = memo(({
     existingOrder.status !== OrderStatus.PENDING && 
     existingOrder.status !== OrderStatus.COMPLETED &&
     existingOrder.status !== OrderStatus.CANCELLED
+
+  // Check if there are any new items to add
+  const hasNewItems = orderItems.some(item => !item.isExistingItem)
 
   return (
     <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full relative">
@@ -313,77 +360,112 @@ export const OrderSummaryPanel = memo(({
         </div>
       </div>
 
-      {/* Customer Information */}
-      <div className="p-3 border-b bg-gray-50">
-        <div className="space-y-3">
-          <div className="flex items-center gap-4">
-            <Label className="text-sm font-medium text-gray-700">Customer Type:</Label>
-            <div className="flex items-center gap-3">
-              <Button
-                variant={isWalkIn ? "default" : "outline"}
-                size="sm"
-                onClick={() => onCustomerTypeChange(true)}
-                className="h-8 px-3 text-xs"
-              >
-                <UserX className="w-3 h-3 mr-1" />
-                Walk-in
-              </Button>
-              <Button
-                variant={!isWalkIn ? "default" : "outline"}
-                size="sm"
-                onClick={() => onCustomerTypeChange(false)}
-                className="h-8 px-3 text-xs"
-              >
-                <UserCheck className="w-3 h-3 mr-1" />
-                Regular
-              </Button>
+      {/* Customer Information - Collapsible */}
+      <div className="border-b bg-gray-50">
+        {/* Header */}
+        <div 
+          className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
+          onClick={() => setIsCustomerInfoCollapsed(!isCustomerInfoCollapsed)}
+        >
+          <div className="flex items-center gap-2">
+            <div className="p-1 bg-gray-200 rounded">
+              {isWalkIn ? (
+                <UserX className="w-3 h-3 text-gray-600" />
+              ) : (
+                <UserCheck className="w-3 h-3 text-gray-600" />
+              )}
             </div>
-          </div>
-
-          {!isWalkIn && (
             <div>
-              <Label htmlFor="customerName" className="text-sm font-medium text-gray-700">
-                Customer Name
-              </Label>
-              <Input
-                id="customerName"
-                type="text"
-                placeholder="Enter or select customer name"
-                value={walkInName || ""}
-                className="mt-1 h-8 text-sm"
-              />
+              <h3 className="text-sm font-medium text-gray-700">Customer Info</h3>
+              <p className="text-xs text-gray-500">
+                {isWalkIn ? "Walk-in" : "Regular"} • {customerCount || 1} customer{(customerCount || 1) > 1 ? 's' : ''}
+              </p>
             </div>
-          )}
-
-          <div>
-            <Label htmlFor="customerCount" className="text-sm font-medium text-gray-700">
-              Number of Customers
-            </Label>
-            <Input
-              id="customerCount"
-              type="number"
-              min="1"
-              max="20"
-              value={customerCount || 1}
-              onChange={(e) => onCustomerCountChange(parseInt(e.target.value) || 1)}
-              className="mt-1 h-8 text-sm w-20"
-            />
           </div>
-
-          <div>
-            <Label htmlFor="orderNotes" className="text-sm font-medium text-gray-700">
-              Order Notes (Optional)
-            </Label>
-            <Input
-              id="orderNotes"
-              type="text"
-              placeholder="Special instructions..."
-              value={orderNotes || ""}
-              onChange={(e) => onOrderNotesChange(e.target.value)}
-              className="mt-1 h-8 text-sm"
-            />
+          <div className="flex items-center gap-1 text-gray-500">
+            {isCustomerInfoCollapsed ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              <ChevronUp className="w-4 h-4" />
+            )}
           </div>
         </div>
+
+        {/* Collapsible Content */}
+        {!isCustomerInfoCollapsed && (
+          <div className="px-3 pb-3">
+            <div className="space-y-3">
+              <div className="flex items-center gap-4">
+                <Label className="text-sm font-medium text-gray-700">Customer Type:</Label>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant={isWalkIn ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => onCustomerTypeChange(true)}
+                    className="h-8 px-3 text-xs"
+                  >
+                    <UserX className="w-3 h-3 mr-1" />
+                    Walk-in
+                  </Button>
+                  <Button
+                    variant={!isWalkIn ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => onCustomerTypeChange(false)}
+                    className="h-8 px-3 text-xs"
+                  >
+                    <UserCheck className="w-3 h-3 mr-1" />
+                    Regular
+                  </Button>
+                </div>
+              </div>
+
+              {!isWalkIn && (
+                <div>
+                  <Label htmlFor="customerName" className="text-sm font-medium text-gray-700">
+                    Customer Name
+                  </Label>
+                  <Input
+                    id="customerName"
+                    type="text"
+                    placeholder="Enter or select customer name"
+                    value={walkInName || ""}
+                    onChange={(e) => onWalkInNameChange(e.target.value)}
+                    className="mt-1 h-8 text-sm"
+                  />
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="customerCount" className="text-sm font-medium text-gray-700">
+                  Number of Customers
+                </Label>
+                <Input
+                  id="customerCount"
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={customerCount || 1}
+                  onChange={(e) => onCustomerCountChange(parseInt(e.target.value) || 1)}
+                  className="mt-1 h-8 text-sm w-20"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="orderNotes" className="text-sm font-medium text-gray-700">
+                  Order Notes (Optional)
+                </Label>
+                <Input
+                  id="orderNotes"
+                  type="text"
+                  placeholder="Special instructions..."
+                  value={orderNotes || ""}
+                  onChange={(e) => onOrderNotesChange(e.target.value)}
+                  className="mt-1 h-8 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Order Items */}
@@ -431,7 +513,7 @@ export const OrderSummaryPanel = memo(({
           {/* Action Buttons */}
           <div className="space-y-2">
             {/* Add More Items Button for existing orders */}
-            {canAddMoreItems && (
+            {canAddMoreItems && hasNewItems && (
               <Button 
                 onClick={onAddMoreItems}
                 disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
@@ -482,7 +564,7 @@ export const OrderSummaryPanel = memo(({
             ) : (
               <Button 
                 onClick={onSubmitOrder}
-                disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder || !hasNewItems}
                 className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
               >
                 {isSubmittingOrder ? (
@@ -493,7 +575,7 @@ export const OrderSummaryPanel = memo(({
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    Send to Kitchen
+                    {hasNewItems ? "Send to Kitchen" : "No New Items"}
                   </>
                 )}
               </Button>
@@ -501,7 +583,7 @@ export const OrderSummaryPanel = memo(({
 
             {/* Secondary buttons */}
             <div className="grid grid-cols-2 gap-2">
-              {(!existingOrder || existingOrder.status === OrderStatus.PENDING) && (
+              {(!existingOrder || existingOrder.status === OrderStatus.PENDING) && hasNewItems && (
                 <Button 
                   onClick={onSaveAsDraft}
                   disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}

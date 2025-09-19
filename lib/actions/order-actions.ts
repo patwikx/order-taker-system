@@ -436,7 +436,7 @@ export async function sendOrderToKitchenAndBar(orderId: string, businessUnitId: 
   }
 }
 
-// Update order (for drafts)
+// Update order (for drafts) - FIXED VERSION
 export async function updateOrder(
   businessUnitId: string,
   orderId: string,
@@ -455,6 +455,9 @@ export async function updateOrder(
         businessUnitId,
         waiterId: session.user.id,
         status: OrderStatus.PENDING
+      },
+      include: {
+        orderItems: true // Get existing order items
       }
     })
 
@@ -478,7 +481,7 @@ export async function updateOrder(
 
     // Calculate new totals
     let totalAmount = 0
-    const orderItemsData = orderData.items.map(item => {
+    const newOrderItemsData = orderData.items.map(item => {
       const menuItem = menuItems.find(mi => mi.id === item.menuItemId)!
       const itemTotal = Number(menuItem.price) * item.quantity
       totalAmount += itemTotal
@@ -488,19 +491,73 @@ export async function updateOrder(
         quantity: item.quantity,
         unitPrice: menuItem.price,
         totalPrice: itemTotal,
-        status: OrderItemStatus.PENDING,
         notes: item.notes
       }
     })
 
-    // Update order
+    // Update order with smart item handling
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      // Delete existing order items
-      await tx.orderItem.deleteMany({
-        where: { orderId }
-      })
+      const existingItems = existingOrder.orderItems
+      const itemsToUpdate: Array<{ id: string } & typeof newOrderItemsData[0]> = []
+      const itemsToCreate: Array<typeof newOrderItemsData[0] & { orderId: string; status: OrderItemStatus }> = []
+      const itemIdsToDelete: string[] = []
 
-      // Update order and create new items
+      // Find existing items that match menu items in the new order
+      for (const newItem of newOrderItemsData) {
+        const existingItem = existingItems.find(
+          item => item.menuItemId === newItem.menuItemId
+        )
+
+        if (existingItem) {
+          // Update existing item
+          itemsToUpdate.push({
+            id: existingItem.id,
+            ...newItem
+          })
+        } else {
+          // Create new item
+          itemsToCreate.push({
+            orderId,
+            ...newItem,
+            status: OrderItemStatus.PENDING
+          })
+        }
+      }
+
+      // Find items to delete (existing items not in new order)
+      for (const existingItem of existingItems) {
+        const stillExists = newOrderItemsData.some(
+          newItem => newItem.menuItemId === existingItem.menuItemId
+        )
+        if (!stillExists) {
+          itemIdsToDelete.push(existingItem.id)
+        }
+      }
+
+      // Execute updates
+      for (const itemUpdate of itemsToUpdate) {
+        const { id, ...updateData } = itemUpdate
+        await tx.orderItem.update({
+          where: { id },
+          data: updateData
+        })
+      }
+
+      // Execute creates
+      if (itemsToCreate.length > 0) {
+        await tx.orderItem.createMany({
+          data: itemsToCreate
+        })
+      }
+
+      // Execute deletes
+      if (itemIdsToDelete.length > 0) {
+        await tx.orderItem.deleteMany({
+          where: { id: { in: itemIdsToDelete } }
+        })
+      }
+
+      // Update order totals
       return await tx.order.update({
         where: { id: orderId },
         data: {
@@ -511,9 +568,7 @@ export async function updateOrder(
           customerCount: orderData.customerCount,
           isWalkIn: orderData.isWalkIn,
           walkInName: orderData.walkInName,
-          orderItems: {
-            create: orderItemsData
-          }
+          updatedAt: new Date()
         },
         include: {
           table: {
@@ -883,29 +938,29 @@ async function sendAdditionalItemsToKitchenAndBar(
     const foodItems = newItems.filter(item => item.menuItem.type === ItemType.FOOD)
     const drinkItems = newItems.filter(item => item.menuItem.type === ItemType.DRINK)
 
-    // Create additional kitchen order for food items
-    if (foodItems.length > 0) {
-      const kitchenItems = foodItems.map(item => ({
-        id: item.id,
-        name: item.menuItem.name,
-        quantity: item.quantity,
-        notes: item.notes,
-        prepTime: item.menuItem.prepTime
-      }))
+// Create additional kitchen order for food items
+if (foodItems.length > 0) {
+  const kitchenItems = foodItems.map(item => ({
+    id: item.id,
+    name: item.menuItem.name,
+    quantity: item.quantity,
+    notes: item.notes,
+    prepTime: item.menuItem.prepTime
+  }))
 
-      await prisma.kitchenOrder.create({
-        data: {
-          orderNumber: `${order.orderNumber}-ADD`,
-          tableNumber: order.table.number,
-          waiterName: order.waiter.name,
-          items: kitchenItems,
-          status: KitchenOrderStatus.PENDING,
-          priority: OrderPriority.NORMAL,
-          estimatedTime: Math.max(...foodItems.map(item => item.menuItem.prepTime || 15)),
-          notes: `Additional items for ${order.orderNumber}`
-        }
-      })
+  await prisma.kitchenOrder.create({
+    data: {
+      orderNumber: `${order.orderNumber}-ADD`, // Mark as additional items
+      tableNumber: order.table.number,
+      waiterName: order.waiter.name,
+      items: kitchenItems,
+      status: KitchenOrderStatus.PENDING, // Start as PENDING (auto-accepted)
+      priority: OrderPriority.NORMAL,
+      estimatedTime: Math.max(...foodItems.map(item => item.menuItem.prepTime || 15)),
+      notes: `Additional items for ${order.orderNumber}`
     }
+  })
+}
 
     // Create additional bar order for drink items
     if (drinkItems.length > 0) {

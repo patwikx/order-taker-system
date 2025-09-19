@@ -16,6 +16,12 @@ export interface CartItem {
   status: OrderItemStatus
   estimatedTime: number
   notes?: string
+  isExistingItem?: boolean // Flag to identify items from existing order
+}
+
+// Helper function to generate unique IDs
+function generateUniqueId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
 export interface OrderState {
@@ -47,6 +53,14 @@ export interface OrderState {
   setClearingOrder: (isClearing: boolean) => void
   setAddingItemId: (itemId: string | null) => void
   
+  // Load existing order items directly
+  loadExistingOrderItems: (orderItems: Array<{
+    menuItem: CartItem['menuItem']
+    quantity: number
+    status: OrderItemStatus
+    notes?: string
+  }>) => void
+  
   // Computed values
   getSubtotal: () => number
   getTax: (taxRate: number) => number
@@ -72,26 +86,34 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     set({ selectedTableId: tableId })
   },
 
+  // Fixed addToOrder function
   addToOrder: (menuItem: CartItem['menuItem']) => {
     set((state) => {
-      const existingItem = state.orderItems.find(item => item.id === menuItem.id)
+      // Only look for existing NEW items (not items from existing order)
+      // This prevents adding to existing order items
+      const existingNewItem = state.orderItems.find(
+        item => item.menuItem.id === menuItem.id && !item.isExistingItem
+      )
       
-      if (existingItem) {
+      if (existingNewItem) {
+        // Update quantity of existing new item
         return {
           orderItems: state.orderItems.map(item =>
-            item.id === menuItem.id
+            item.id === existingNewItem.id
               ? { ...item, quantity: item.quantity + 1 }
               : item
           )
         }
       } else {
+        // Create new item
         const newItem: CartItem = {
-          id: menuItem.id,
+          id: generateUniqueId(),
           menuItem,
           quantity: 1,
           status: OrderItemStatus.PENDING,
           estimatedTime: menuItem.prepTime || 10,
-          notes: undefined
+          notes: undefined,
+          isExistingItem: false // Mark as new item
         }
         return {
           orderItems: [...state.orderItems, newItem]
@@ -163,6 +185,21 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
   setAddingItemId: (itemId: string | null) => {
     set({ addingItemId: itemId })
+  },
+
+  // Fixed loadExistingOrderItems function
+  loadExistingOrderItems: (orderItems) => {
+    set({
+      orderItems: orderItems.map(item => ({
+        id: generateUniqueId(),
+        menuItem: item.menuItem,
+        quantity: item.quantity,
+        status: item.status,
+        estimatedTime: item.menuItem.prepTime || 10,
+        notes: item.notes,
+        isExistingItem: true // Mark as existing item
+      }))
+    })
   },
 
   // Computed values
