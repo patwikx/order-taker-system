@@ -22,6 +22,9 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  Archive,
+  FolderX,
+  CheckCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -386,32 +389,50 @@ export function CategoryManagement({ businessUnitId, initialCategories }: Catego
                 Quick Stats
               </Label>
               
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total Categories:</span>
-                  <span className="font-medium">{statsData.totalCategories}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Enabled:</span>
-                  <span className="font-medium text-green-600">{statsData.activeCategories}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total Items:</span>
-                  <span className="font-medium">{statsData.totalMenuItems}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Avg Items/Cat:</span>
-                  <span className="font-medium">{statsData.avgItemsPerCategory}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">With Items:</span>
-                  <span className="font-medium text-blue-600">{statsData.categoriesWithItems}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Empty:</span>
-                  <span className="font-medium text-gray-500">{statsData.emptyCategoriesCount}</span>
-                </div>
-              </div>
+<div className="space-y-2 text-sm">
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <FolderOpen className="w-4 h-4 text-slate-500" />
+          Total Categories:
+        </span>
+        <span className="font-medium">{statsData.totalCategories}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <CheckCircle className="w-4 h-4 text-green-500" />
+          Enabled:
+        </span>
+        <span className="font-medium text-green-600">{statsData.activeCategories}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <Package className="w-4 h-4 text-purple-500" />
+          Total Items:
+        </span>
+        <span className="font-medium">{statsData.totalMenuItems}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-orange-500" />
+          Avg Items/Cat:
+        </span>
+        <span className="font-medium">{statsData.avgItemsPerCategory}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <Archive className="w-4 h-4 text-blue-500" />
+          With Items:
+        </span>
+        <span className="font-medium text-blue-600">{statsData.categoriesWithItems}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <FolderX className="w-4 h-4 text-gray-400" />
+          Empty:
+        </span>
+        <span className="font-medium text-gray-500">{statsData.emptyCategoriesCount}</span>
+      </div>
+    </div>
             </div>
           </div>
         )}

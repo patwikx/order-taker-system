@@ -23,6 +23,10 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  CheckCircle,
+  CircleCheck,
+  Calendar,
+  UserCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -516,36 +520,50 @@ export function TableManagement({ businessUnitId, initialTables }: TableManageme
                 Quick Stats
               </Label>
               
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total Tables:</span>
-                  <span className="font-medium">{statsData.totalTables}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Enabled:</span>
-                  <span className="font-medium text-blue-600">{statsData.activeTables}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Available:</span>
-                  <span className="font-medium text-green-600">{statsData.availableTables}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Occupied:</span>
-                  <span className="font-medium text-blue-600">{statsData.occupiedTables}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Reserved:</span>
-                  <span className="font-medium text-yellow-600">{statsData.reservedTables}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total Capacity:</span>
-                  <span className="font-medium">{statsData.totalCapacity}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Avg Capacity:</span>
-                  <span className="font-medium">{statsData.avgCapacity.toFixed(1)}</span>
-                </div>
-              </div>
+    <div className="space-y-2 text-sm">
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <CheckCircle className="w-4 h-4 text-blue-500" />
+          Enabled:
+        </span>
+        <span className="font-medium text-blue-600">{statsData.activeTables}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <CircleCheck className="w-4 h-4 text-green-500" />
+          Available:
+        </span>
+        <span className="font-medium text-green-600">{statsData.availableTables}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <Users className="w-4 h-4 text-blue-500" />
+          Occupied:
+        </span>
+        <span className="font-medium text-blue-600">{statsData.occupiedTables}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-yellow-500" />
+          Reserved:
+        </span>
+        <span className="font-medium text-yellow-600">{statsData.reservedTables}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <UserCheck className="w-4 h-4 text-purple-500" />
+          Total Capacity:
+        </span>
+        <span className="font-medium">{statsData.totalCapacity}</span>
+      </div>
+      <div className="flex justify-between items-center">
+        <span className="text-gray-600 flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-orange-500" />
+          Avg Capacity:
+        </span>
+        <span className="font-medium">{statsData.avgCapacity.toFixed(1)}</span>
+      </div>
+    </div>
             </div>
           </div>
         )}

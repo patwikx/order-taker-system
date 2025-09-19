@@ -11,7 +11,6 @@ export interface BusinessUnitDetails {
   email?: string
   timezone: string
   currency: string
-  taxRate: number
   isActive: boolean
   settings?: Record<string, unknown>
 }
@@ -33,7 +32,6 @@ export async function getBusinessUnit(businessUnitId: string): Promise<BusinessU
         email: true,
         timezone: true,
         currency: true,
-        taxRate: true,
         isActive: true,
         settings: true
       }
@@ -52,12 +50,42 @@ export async function getBusinessUnit(businessUnitId: string): Promise<BusinessU
       email: businessUnit.email ?? undefined,
       timezone: businessUnit.timezone,
       currency: businessUnit.currency,
-      taxRate: Number(businessUnit.taxRate),
       isActive: businessUnit.isActive,
       settings: (businessUnit.settings as Record<string, unknown>) ?? undefined
     }
   } catch (error) {
     console.error("Error fetching business unit:", error)
     return null
+  }
+}
+
+export async function getAllBusinessUnits(): Promise<
+  Array<{
+    id: string
+    code: string
+    name: string
+    isActive: boolean
+  }>
+> {
+  try {
+    const businessUnits = await prisma.businessUnit.findMany({
+      where: {
+        isActive: true,
+      },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        isActive: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    })
+
+    return businessUnits
+  } catch (error) {
+    console.error("Error fetching all business units:", error)
+    return []
   }
 }
