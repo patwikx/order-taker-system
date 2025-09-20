@@ -457,6 +457,7 @@ const PermissionAssignmentDialog = ({
 }
 
 export function RoleManagement({ initialRoles, permissions }: RoleManagementProps) {
+  const router = useRouter()
   const [roles, setRoles] = useState<RoleWithPermissions[]>(initialRoles)
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<string>("all")
