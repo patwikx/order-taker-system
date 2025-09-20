@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   Search,
   Filter,
@@ -106,8 +106,8 @@ export function AuditLogManagement({ businessUnitId }: AuditLogManagementProps) 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const uniqueUsers = Array.from(new Set(auditLogs.map(log => log.user?.name).filter(Boolean))).sort()
 
-  // Load audit logs
-  const loadAuditLogs = async () => {
+  // Load audit logs - using useCallback to memoize the function
+  const loadAuditLogs = useCallback(async () => {
     try {
       setIsLoading(true)
       const options = {
@@ -128,10 +128,10 @@ export function AuditLogManagement({ businessUnitId }: AuditLogManagementProps) 
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [businessUnitId, selectedAction, selectedTable, selectedUser, startDate, endDate])
 
-  // Load statistics
-  const loadStats = async () => {
+  // Load statistics - using useCallback to memoize the function
+  const loadStats = useCallback(async () => {
     try {
       const result = await getAuditLogStats(businessUnitId)
       if (result.success && result.stats) {
@@ -140,13 +140,13 @@ export function AuditLogManagement({ businessUnitId }: AuditLogManagementProps) 
     } catch (error) {
       console.error("Error loading audit stats:", error)
     }
-  }
+  }, [businessUnitId])
 
-  // Initial load
+  // Initial load and reload when filters change
   useEffect(() => {
     loadAuditLogs()
     loadStats()
-  }, [businessUnitId])
+  }, [loadAuditLogs, loadStats])
 
   // Filter audit logs
   const filteredLogs = auditLogs.filter((log) => {

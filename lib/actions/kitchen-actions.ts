@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
-import { KitchenOrderStatus, OrderStatus, OrderItemStatus, ItemType } from "@prisma/client"
+import { KitchenOrderStatus, OrderStatus, OrderItemStatus, ItemType, AuditAction } from "@prisma/client"
+import { headers } from "next/headers"
+import { Prisma } from "@prisma/client"
 
 export interface KitchenOrderWithDetails {
   id: string
@@ -47,6 +49,41 @@ function transformToKitchenOrderItems(jsonItems: unknown): KitchenOrderItem[] {
   }
 
   return jsonItems.filter(isKitchenOrderItem)
+}
+
+// Helper function to create audit log entries
+async function createAuditLog(
+  businessUnitId: string,
+  tableName: string,
+  recordId: string,
+  action: AuditAction,
+  oldValues?: Record<string, unknown> | null,
+  newValues?: Record<string, unknown> | null,
+  userId?: string
+) {
+  try {
+    const headersList = await headers()
+    const ipAddress = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown'
+    const userAgent = headersList.get('user-agent') || 'unknown'
+
+    await prisma.auditLog.create({
+      data: {
+        businessUnitId,
+        tableName,
+        recordId,
+        action,
+        oldValues: oldValues ? (oldValues as Prisma.InputJsonValue) : Prisma.DbNull,
+        newValues: newValues ? (newValues as Prisma.InputJsonValue) : Prisma.DbNull,
+        userId,
+        ipAddress,
+        userAgent,
+        sessionId: null, // You can add session tracking if needed
+      }
+    })
+  } catch (error) {
+    console.error("Failed to create audit log:", error)
+    // Don't throw here - audit logging shouldn't break the main operation
+  }
 }
 
 // Get all active kitchen orders (3 stages: PENDING, PREPARING, READY)
@@ -197,6 +234,14 @@ export async function updateKitchenOrderStatus(
       throw new Error("Kitchen order not found")
     }
 
+    // Store old values for audit log
+    const oldValues = {
+      status: kitchenOrder.status,
+      startedAt: kitchenOrder.startedAt,
+      completedAt: kitchenOrder.completedAt,
+      pickedUpAt: kitchenOrder.pickedUpAt
+    }
+
     const updateData: {
       status: KitchenOrderStatus
       startedAt?: Date
@@ -218,10 +263,26 @@ export async function updateKitchenOrderStatus(
     }
 
     // Update kitchen order
-    await prisma.kitchenOrder.update({
+    const updatedKitchenOrder = await prisma.kitchenOrder.update({
       where: { id: kitchenOrderId },
       data: updateData
     })
+
+    // Create audit log for kitchen order status update
+    await createAuditLog(
+      businessUnitId,
+      'kitchen_orders',
+      kitchenOrderId,
+      AuditAction.UPDATE,
+      oldValues,
+      {
+        status: updatedKitchenOrder.status,
+        startedAt: updatedKitchenOrder.startedAt,
+        completedAt: updatedKitchenOrder.completedAt,
+        pickedUpAt: updatedKitchenOrder.pickedUpAt
+      },
+      session.user.id
+    )
 
     // If order is ready, update the main order items status
     if (status === KitchenOrderStatus.READY) {
@@ -244,6 +305,17 @@ export async function updateKitchenOrderStatus(
             where: { id: { in: foodItemIds } },
             data: { status: OrderItemStatus.READY }
           })
+
+          // Create audit log for order items status update
+          await createAuditLog(
+            businessUnitId,
+            'order_items',
+            foodItemIds.join(','),
+            AuditAction.UPDATE,
+            { status: 'PREPARING' },
+            { status: 'READY' },
+            session.user.id
+          )
         }
 
         // Check if all items are ready to update main order status
@@ -258,10 +330,22 @@ export async function updateKitchenOrderStatus(
         )
 
         if (allItemsReady && mainOrder.status !== OrderStatus.READY) {
+          const oldOrderStatus = mainOrder.status
           await prisma.order.update({
             where: { id: mainOrder.id },
             data: { status: OrderStatus.READY }
           })
+
+          // Create audit log for main order status update
+          await createAuditLog(
+            businessUnitId,
+            'orders',
+            mainOrder.id,
+            AuditAction.UPDATE,
+            { status: oldOrderStatus },
+            { status: OrderStatus.READY },
+            session.user.id
+          )
         }
       }
     }
@@ -286,6 +370,17 @@ export async function updateKitchenOrderStatus(
             where: { id: { in: foodItemIds } },
             data: { status: OrderItemStatus.SERVED }
           })
+
+          // Create audit log for order items status update
+          await createAuditLog(
+            businessUnitId,
+            'order_items',
+            foodItemIds.join(','),
+            AuditAction.UPDATE,
+            { status: 'READY' },
+            { status: 'SERVED' },
+            session.user.id
+          )
         }
       }
     }
@@ -320,6 +415,8 @@ export async function markOrderPickedUp(businessUnitId: string, kitchenOrderId: 
 // Auto-accept all pending orders (called periodically or on new orders)
 export async function autoAcceptPendingOrders(businessUnitId: string) {
   try {
+    const session = await auth()
+    
     // Get base order numbers for this business unit
     const baseOrderNumbers = await prisma.order.findMany({
       where: { businessUnitId },
@@ -333,6 +430,16 @@ export async function autoAcceptPendingOrders(businessUnitId: string) {
       allOrderNumbers.push(orderNumber) // Base order
       allOrderNumbers.push(`${orderNumber}-ADD`) // Additional items order
     }
+
+    // Get all pending orders before update for audit log
+    const pendingOrders = await prisma.kitchenOrder.findMany({
+      where: {
+        orderNumber: {
+          in: allOrderNumbers
+        },
+        status: KitchenOrderStatus.PENDING
+      }
+    })
 
     // Auto-accept all pending orders
     await prisma.kitchenOrder.updateMany({
@@ -348,6 +455,19 @@ export async function autoAcceptPendingOrders(businessUnitId: string) {
       }
     })
 
+    // Create audit logs for each accepted order
+    for (const order of pendingOrders) {
+      await createAuditLog(
+        businessUnitId,
+        'kitchen_orders',
+        order.id,
+        AuditAction.UPDATE,
+        { status: KitchenOrderStatus.PENDING },
+        { status: KitchenOrderStatus.PENDING, updatedAt: new Date() },
+        session?.user?.id
+      )
+    }
+
     revalidatePath(`/${businessUnitId}/kitchen`)
     return { success: true }
   } catch (error) {
@@ -359,6 +479,8 @@ export async function autoAcceptPendingOrders(businessUnitId: string) {
 // Remove completed orders from kitchen display
 export async function removeCompletedOrders(businessUnitId: string) {
   try {
+    const session = await auth()
+
     // Get base order numbers for this business unit
     const baseOrderNumbers = await prisma.order.findMany({
       where: { businessUnitId },
@@ -371,6 +493,40 @@ export async function removeCompletedOrders(businessUnitId: string) {
     for (const orderNumber of baseOrderNumbers) {
       allOrderNumbers.push(orderNumber) // Base order
       allOrderNumbers.push(`${orderNumber}-ADD`) // Additional items order
+    }
+
+    // Get orders to be deleted for audit log
+    const ordersToDelete = await prisma.kitchenOrder.findMany({
+      where: {
+        orderNumber: {
+          in: allOrderNumbers
+        },
+        status: KitchenOrderStatus.SERVED,
+        pickedUpAt: {
+          lt: new Date(Date.now() - 24 * 60 * 60 * 1000) // 24 hours ago
+        }
+      }
+    })
+
+    // Create audit logs before deletion
+    for (const order of ordersToDelete) {
+      await createAuditLog(
+        businessUnitId,
+        'kitchen_orders',
+        order.id,
+        AuditAction.DELETE,
+        {
+          id: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          tableNumber: order.tableNumber,
+          waiterName: order.waiterName,
+          pickedUpAt: order.pickedUpAt,
+          completedAt: order.completedAt
+        },
+        null,
+        session?.user?.id
+      )
     }
 
     // Update completed orders to a final status (or delete them)

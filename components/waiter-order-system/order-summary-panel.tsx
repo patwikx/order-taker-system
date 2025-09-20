@@ -688,7 +688,7 @@ export const OrderSummaryPanel = memo(({
               Confirm Order Settlement
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>Are you sure you want to settle this order?</p>
+              Are you sure you want to settle this order?
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Order Total:</span>
@@ -732,7 +732,7 @@ export const OrderSummaryPanel = memo(({
               Print Receipt
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>Do you want to print the receipt for this order?</p>
+              Do you want to print the receipt for this order?
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Order Total:</span>
@@ -780,7 +780,7 @@ export const OrderSummaryPanel = memo(({
               Send Order to Kitchen
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>Are you ready to send this order to the kitchen?</p>
+              Are you ready to send this order to the kitchen?
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Order Total:</span>
@@ -826,7 +826,7 @@ export const OrderSummaryPanel = memo(({
               Send Draft Order to Kitchen
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>Are you ready to send this draft order to the kitchen?</p>
+              Are you ready to send this draft order to the kitchen?
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Order Total:</span>
