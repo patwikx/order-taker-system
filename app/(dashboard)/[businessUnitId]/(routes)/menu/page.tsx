@@ -3,13 +3,17 @@ import { auth } from "@/auth"
 import { CategoryManagement } from "@/components/admin/category-management"
 import { MenuItemManagement } from "@/components/admin/menu-item-management"
 import { TableManagement } from "@/components/admin/table-management"
+import { CustomerManagement } from "@/components/admin/customer-management"
+import { AuditLogManagement } from "@/components/admin/audit-log-management"
+import { SettingsManagement } from "@/components/admin/settings-management"
 import { getAllCategories, getAllMenuItems } from "@/lib/actions/menu-actions"
 import { getAllTables } from "@/lib/actions/table-actions"
+import { getAllCustomers } from "@/lib/actions/customer-actions"
 import { getBusinessUnit } from "@/lib/actions/business-unit-actions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { FolderOpen, Package, Users, Shield, Clock, TrendingUp } from "lucide-react"
+import { FolderOpen, Package, Users, Shield, Clock, TrendingUp, Database, Settings as SettingsIcon } from "lucide-react"
 
 interface AdminPageProps {
   params: Promise<{
@@ -38,11 +42,12 @@ export default async function AdminPage({ params }: AdminPageProps) {
   }
 
   // Fetch all data needed for admin dashboard
-  const [businessUnit, categories, menuItems, tables] = await Promise.all([
+  const [businessUnit, categories, menuItems, tables, customers] = await Promise.all([
     getBusinessUnit(businessUnitId),
     getAllCategories(businessUnitId),
     getAllMenuItems(businessUnitId),
     getAllTables(businessUnitId),
+    getAllCustomers(businessUnitId),
   ])
 
   if (!businessUnit) {
@@ -55,6 +60,8 @@ export default async function AdminPage({ params }: AdminPageProps) {
   const activeTables = tables.filter((t) => t.isActive).length
   const occupiedTables = tables.filter((t) => t.status === "OCCUPIED" && t.isActive).length
   const totalCapacity = tables.filter((t) => t.isActive).reduce((sum, table) => sum + table.capacity, 0)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const activeCustomers = customers.filter((c) => c.isActive).length
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -140,7 +147,7 @@ export default async function AdminPage({ params }: AdminPageProps) {
 
         {/* Management Tabs */}
         <Tabs defaultValue="categories" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="categories" className="flex items-center gap-2">
               <FolderOpen className="w-4 h-4" />
               Categories
@@ -152,6 +159,18 @@ export default async function AdminPage({ params }: AdminPageProps) {
             <TabsTrigger value="tables" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
               Tables
+            </TabsTrigger>
+            <TabsTrigger value="customers" className="flex items-center gap-2">
+              <Users className="w-4 h-4" />
+              Customers
+            </TabsTrigger>
+            <TabsTrigger value="audit-logs" className="flex items-center gap-2">
+              <Database className="w-4 h-4" />
+              Audit Logs
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <SettingsIcon className="w-4 h-4" />
+              Settings
             </TabsTrigger>
           </TabsList>
 
@@ -169,6 +188,18 @@ export default async function AdminPage({ params }: AdminPageProps) {
 
           <TabsContent value="tables" className="space-y-6">
             <TableManagement businessUnitId={businessUnitId} initialTables={tables} />
+          </TabsContent>
+
+          <TabsContent value="customers" className="space-y-6">
+            <CustomerManagement businessUnitId={businessUnitId} initialCustomers={customers} />
+          </TabsContent>
+
+          <TabsContent value="audit-logs" className="space-y-6">
+            <AuditLogManagement businessUnitId={businessUnitId} />
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-6">
+            <SettingsManagement />
           </TabsContent>
         </Tabs>
       </div>

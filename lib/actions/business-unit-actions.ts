@@ -9,6 +9,7 @@ export interface BusinessUnitDetails {
   address?: string
   phone?: string
   email?: string
+  taxRate: number
   timezone: string
   currency: string
   isActive: boolean
@@ -30,6 +31,7 @@ export async function getBusinessUnit(businessUnitId: string): Promise<BusinessU
         address: true,
         phone: true,
         email: true,
+        taxRate: true,
         timezone: true,
         currency: true,
         isActive: true,
@@ -49,6 +51,7 @@ export async function getBusinessUnit(businessUnitId: string): Promise<BusinessU
       phone: businessUnit.phone ?? undefined,
       email: businessUnit.email ?? undefined,
       timezone: businessUnit.timezone,
+      taxRate: Number(businessUnit.taxRate),
       currency: businessUnit.currency,
       isActive: businessUnit.isActive,
       settings: (businessUnit.settings as Record<string, unknown>) ?? undefined

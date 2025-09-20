@@ -17,13 +17,15 @@ import {
   ClipboardList,
   LayoutDashboard,
   ChevronDown,
-  UserSearch as UserStar,
   Clock,
   TrendingUp,
   Package,
   BookOpen,
   Sparkles,
   Menu,
+  Shield,
+  Key,
+  Database,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -79,15 +81,6 @@ const navigation: NavItem[] = [
       { title: "Specials", href: "/menu/specials", icon: Sparkles, roles: ["MANAGER"] },
     ],
   },
-  {
-    title: "Customer Management",
-    icon: Users,
-    children: [
-      { title: "All Customers", href: "/customers", icon: Users, roles: ["MANAGER", "CASHIER"] },
-      { title: "Regular Customers", href: "/customers/regular", icon: UserStar, roles: ["MANAGER", "CASHIER"] },
-      { title: "Customer Preferences", href: "/customers/preferences", icon: FileText, roles: ["MANAGER"] },
-    ],
-  },
   // {
   //  title: "Payments & Billing",
   //  icon: CreditCard,
@@ -113,9 +106,12 @@ const navigation: NavItem[] = [
     icon: Settings,
     children: [
       { title: "Business Units", href: "/business-units", icon: Building2, roles: ["MANAGER"] },
-      { title: "Staff Management", href: "/staff", icon: Users, roles: ["MANAGER"] },
-      { title: "System Settings", href: "/settings", icon: Settings, roles: ["MANAGER"] },
-      { title: "Audit Logs", href: "/audit", icon: FileText, roles: ["MANAGER"] },
+      { title: "Staff Management", href: "/admin/users", icon: Users, roles: ["MANAGER"] },
+      { title: "Roles", href: "/admin/roles", icon: Shield, roles: ["MANAGER"] },
+      { title: "Permissions", href: "/admin/permissions", icon: Key, roles: ["MANAGER"] },
+      { title: "Customers", href: "/admin/customers", icon: Users, roles: ["MANAGER"] },
+      { title: "Audit Logs", href: "/admin/audit-logs", icon: Database, roles: ["MANAGER"] },
+      { title: "System Settings", href: "/admin/settings", icon: Settings, roles: ["MANAGER"] },
     ],
   },
 ]

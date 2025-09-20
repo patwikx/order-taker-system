@@ -17,11 +17,23 @@ import {
   CheckCircle2, 
   Loader2,
   ChevronDown,
-  ChevronUp 
+  ChevronUp,
+  AlertTriangle,
+  Printer
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from "@/components/ui/alert-dialog"
 import { OrderStatus, OrderItemStatus, ItemType } from "@prisma/client"
 import type { CartItem } from "@/hooks/order-store"
 import type { TableWithCurrentOrder } from "@/lib/actions/table-actions"
@@ -59,6 +71,7 @@ interface OrderSummaryPanelProps {
   onSendDraftToKitchen: () => void
   onClearAll: () => void
   onAddMoreItems: () => void
+  onPrintReceipt?: () => void // Added print handler
 }
 
 const ImageWithFallback = memo(({ 
@@ -157,7 +170,7 @@ const OrderItem = memo(({
                 <h4 className="font-medium text-gray-900 text-sm truncate">{item.menuItem.name}</h4>
                 {item.isExistingItem && (
                   <span className="bg-blue-600 text-white px-1.5 py-0.5 rounded-full text-xs font-medium">
-                    Existing
+                    Preparing
                   </span>
                 )}
                 {!item.isExistingItem && (
@@ -270,10 +283,15 @@ export const OrderSummaryPanel = memo(({
   onSettleOrder,
   onSendDraftToKitchen,
   onClearAll,
-  onAddMoreItems
+  onAddMoreItems,
+  onPrintReceipt
 }: OrderSummaryPanelProps) => {
   const formatPrice = useCallback((price: number) => `₱${price.toFixed(2)}`, [])
   const [isCustomerInfoCollapsed, setIsCustomerInfoCollapsed] = useState(false)
+  const [showSettleDialog, setShowSettleDialog] = useState(false)
+  const [showPrintDialog, setShowPrintDialog] = useState(false)
+  const [showSendToKitchenDialog, setShowSendToKitchenDialog] = useState(false)
+  const [showSendDraftDialog, setShowSendDraftDialog] = useState(false)
 
   // Use the calculation functions from the store instead of manual calculation
   const subtotal = getSubtotal()
@@ -289,348 +307,568 @@ export const OrderSummaryPanel = memo(({
   // Check if there are any new items to add
   const hasNewItems = orderItems.some(item => !item.isExistingItem)
 
+  const handleSettleOrder = () => {
+    setShowSettleDialog(false)
+    onSettleOrder()
+  }
+
+  const handlePrintReceipt = () => {
+    setShowPrintDialog(false)
+    if (onPrintReceipt) {
+      onPrintReceipt()
+    }
+  }
+
+  const handleSendToKitchen = () => {
+    setShowSendToKitchenDialog(false)
+    onSubmitOrder()
+  }
+
+  const handleSendDraftToKitchen = () => {
+    setShowSendDraftDialog(false)
+    onSendDraftToKitchen()
+  }
+
   return (
-    <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full relative">
-      {/* Loading Overlay */}
-      {(isSubmittingOrder || isClearingOrder || isLoadingOrder || isSettlingOrder) && (
-        <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50">
-          <div className="flex flex-col items-center gap-3">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">
-              {isLoadingOrder 
-                ? "Loading order data..." 
-                : isSettlingOrder
-                ? "Settling order..."
-                : isSubmittingOrder 
-                ? (isEditingOrder ? "Updating Order..." : "Sending Order...") 
-                : "Clearing Order..."}
-            </span>
-          </div>
-        </div>
-      )}
-      
-      {/* Header */}
-      <div className="p-3 border-b bg-gradient-to-r from-purple-50 to-blue-50 flex-shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-purple-100 rounded-lg">
-              <ShoppingCart className="w-4 h-4 text-purple-600" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-gray-900 text-sm">
-                {isEditingOrder ? "Edit Order" : "Order Summary"}
-              </h2>
-              <p className="text-xs text-gray-600">{orderItems.length} items selected</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-base font-bold text-green-600">{formatPrice(total)}</div>
-            <div className="text-xs text-gray-500">Total Amount</div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-medium">
-              Table {selectedTable?.number}
-            </span>
-            {existingOrder && (
-              <span className="bg-orange-600 text-white px-2 py-0.5 rounded-full text-xs font-medium">
-                {existingOrder.orderNumber}
+    <>
+      <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full relative">
+        {/* Loading Overlay */}
+        {(isSubmittingOrder || isClearingOrder || isLoadingOrder || isSettlingOrder) && (
+          <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50">
+            <div className="flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+              <span className="text-sm font-medium text-gray-700">
+                {isLoadingOrder 
+                  ? "Loading order data..." 
+                  : isSettlingOrder
+                  ? "Settling order..."
+                  : isSubmittingOrder 
+                  ? (isEditingOrder ? "Updating Order..." : "Sending Order...") 
+                  : "Clearing Order..."}
               </span>
-            )}
-            <div className="flex items-center gap-1 text-xs text-gray-500">
-              <Clock className="w-3 h-3" />
-              <span>{currentTime.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })}</span>
             </div>
           </div>
-          <Button 
-            onClick={onClearAll}
-            disabled={isClearingOrder || isSubmittingOrder || isSettlingOrder}
-            variant='outline' 
-            size='sm' 
-            className="text-xs h-6 px-2 flex items-center gap-1"
-          >
-            {isClearingOrder ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              "Clear All"
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Customer Information - Collapsible */}
-      <div className="border-b bg-gray-50">
+        )}
+        
         {/* Header */}
-        <div 
-          className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
-          onClick={() => setIsCustomerInfoCollapsed(!isCustomerInfoCollapsed)}
-        >
-          <div className="flex items-center gap-2">
-            <div className="p-1 bg-gray-200 rounded">
-              {isWalkIn ? (
-                <UserX className="w-3 h-3 text-gray-600" />
+        <div className="p-3 border-b bg-gradient-to-r from-purple-50 to-blue-50 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-purple-100 rounded-lg">
+                <ShoppingCart className="w-4 h-4 text-purple-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-gray-900 text-sm">
+                  {isEditingOrder ? "Edit Order" : "Order Summary"}
+                </h2>
+                <p className="text-xs text-gray-600">{orderItems.length} items selected</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-base font-bold text-green-600">{formatPrice(total)}</div>
+              <div className="text-xs text-gray-500">Total Amount</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-medium">
+                Table {selectedTable?.number}
+              </span>
+              {existingOrder && (
+                <span className="bg-orange-600 text-white px-2 py-0.5 rounded-full text-xs font-medium">
+                  {existingOrder.orderNumber}
+                </span>
+              )}
+              <div className="flex items-center gap-1 text-xs text-gray-500">
+                <Clock className="w-3 h-3" />
+                <span>{currentTime.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+            </div>
+            <Button 
+              onClick={onClearAll}
+              disabled={isClearingOrder || isSubmittingOrder || isSettlingOrder}
+              variant='outline' 
+              size='sm' 
+              className="text-xs h-6 px-2 flex items-center gap-1"
+            >
+              {isClearingOrder ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
               ) : (
-                <UserCheck className="w-3 h-3 text-gray-600" />
+                "Clear All"
+              )}
+            </Button>
+          </div>
+        </div>
+
+        {/* Customer Information - Collapsible */}
+        <div className="border-b bg-gray-50">
+          {/* Header */}
+          <div 
+            className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
+            onClick={() => setIsCustomerInfoCollapsed(!isCustomerInfoCollapsed)}
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-1 bg-gray-200 rounded">
+                {isWalkIn ? (
+                  <UserX className="w-3 h-3 text-gray-600" />
+                ) : (
+                  <UserCheck className="w-3 h-3 text-gray-600" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-700">Customer Info</h3>
+                <p className="text-xs text-gray-500">
+                  {isWalkIn ? "Walk-in" : "Regular"} • {customerCount || 1} customer{(customerCount || 1) > 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-gray-500">
+              {isCustomerInfoCollapsed ? (
+                <ChevronDown className="w-4 h-4" />
+              ) : (
+                <ChevronUp className="w-4 h-4" />
               )}
             </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-700">Customer Info</h3>
-              <p className="text-xs text-gray-500">
-                {isWalkIn ? "Walk-in" : "Regular"} • {customerCount || 1} customer{(customerCount || 1) > 1 ? 's' : ''}
-              </p>
-            </div>
           </div>
-          <div className="flex items-center gap-1 text-gray-500">
-            {isCustomerInfoCollapsed ? (
-              <ChevronDown className="w-4 h-4" />
-            ) : (
-              <ChevronUp className="w-4 h-4" />
-            )}
-          </div>
-        </div>
 
-        {/* Collapsible Content */}
-        {!isCustomerInfoCollapsed && (
-          <div className="px-3 pb-3">
-            <div className="space-y-3">
-              <div className="flex items-center gap-4">
-                <Label className="text-sm font-medium text-gray-700">Customer Type:</Label>
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant={isWalkIn ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => onCustomerTypeChange(true)}
-                    className="h-8 px-3 text-xs"
-                  >
-                    <UserX className="w-3 h-3 mr-1" />
-                    Walk-in
-                  </Button>
-                  <Button
-                    variant={!isWalkIn ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => onCustomerTypeChange(false)}
-                    className="h-8 px-3 text-xs"
-                  >
-                    <UserCheck className="w-3 h-3 mr-1" />
-                    Regular
-                  </Button>
+          {/* Collapsible Content */}
+          {!isCustomerInfoCollapsed && (
+            <div className="px-3 pb-3">
+              <div className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <Label className="text-sm font-medium text-gray-700">Customer Type:</Label>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant={isWalkIn ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => onCustomerTypeChange(true)}
+                      className="h-8 px-3 text-xs"
+                    >
+                      <UserX className="w-3 h-3 mr-1" />
+                      Walk-in
+                    </Button>
+                    <Button
+                      variant={!isWalkIn ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => onCustomerTypeChange(false)}
+                      className="h-8 px-3 text-xs"
+                    >
+                      <UserCheck className="w-3 h-3 mr-1" />
+                      Regular
+                    </Button>
+                  </div>
                 </div>
-              </div>
 
-              {!isWalkIn && (
+                {!isWalkIn && (
+                  <div>
+                    <Label htmlFor="customerName" className="text-sm font-medium text-gray-700">
+                      Customer Name
+                    </Label>
+                    <Input
+                      id="customerName"
+                      type="text"
+                      placeholder="Enter or select customer name"
+                      value={walkInName || ""}
+                      onChange={(e) => onWalkInNameChange(e.target.value)}
+                      className="mt-1 h-8 text-sm"
+                    />
+                  </div>
+                )}
+
                 <div>
-                  <Label htmlFor="customerName" className="text-sm font-medium text-gray-700">
-                    Customer Name
+                  <Label htmlFor="customerCount" className="text-sm font-medium text-gray-700">
+                    Number of Customers
                   </Label>
                   <Input
-                    id="customerName"
+                    id="customerCount"
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={customerCount || 1}
+                    onChange={(e) => onCustomerCountChange(parseInt(e.target.value) || 1)}
+                    className="mt-1 h-8 text-sm w-20"
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="orderNotes" className="text-sm font-medium text-gray-700">
+                    Order Notes (Optional)
+                  </Label>
+                  <Input
+                    id="orderNotes"
                     type="text"
-                    placeholder="Enter or select customer name"
-                    value={walkInName || ""}
-                    onChange={(e) => onWalkInNameChange(e.target.value)}
+                    placeholder="Special instructions..."
+                    value={orderNotes || ""}
+                    onChange={(e) => onOrderNotesChange(e.target.value)}
                     className="mt-1 h-8 text-sm"
                   />
                 </div>
-              )}
-
-              <div>
-                <Label htmlFor="customerCount" className="text-sm font-medium text-gray-700">
-                  Number of Customers
-                </Label>
-                <Input
-                  id="customerCount"
-                  type="number"
-                  min="1"
-                  max="20"
-                  value={customerCount || 1}
-                  onChange={(e) => onCustomerCountChange(parseInt(e.target.value) || 1)}
-                  className="mt-1 h-8 text-sm w-20"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="orderNotes" className="text-sm font-medium text-gray-700">
-                  Order Notes (Optional)
-                </Label>
-                <Input
-                  id="orderNotes"
-                  type="text"
-                  placeholder="Special instructions..."
-                  value={orderNotes || ""}
-                  onChange={(e) => onOrderNotesChange(e.target.value)}
-                  className="mt-1 h-8 text-sm"
-                />
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Order Items */}
-      <div className="flex-1 overflow-y-auto p-3 min-h-0">
-        {orderItems.length === 0 ? (
-          <div className="text-center py-6">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Receipt className="w-6 h-6 text-gray-400" />
+        {/* Order Items */}
+        <div className="flex-1 overflow-y-auto p-3 min-h-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <style jsx>{`
+            .flex-1::-webkit-scrollbar {
+              display: none;
+            }
+          `}</style>
+          {orderItems.length === 0 ? (
+            <div className="text-center py-6">
+              <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <Receipt className="w-6 h-6 text-gray-400" />
+              </div>
+              <p className="text-gray-500 text-sm mb-1">No items in order</p>
+              <p className="text-xs text-gray-400">Add items from the menu</p>
             </div>
-            <p className="text-gray-500 text-sm mb-1">No items in order</p>
-            <p className="text-xs text-gray-400">Add items from the menu</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {orderItems.map((item) => (
-              <OrderItem
-                key={item.id}
-                item={item}
-                onUpdateQuantity={onUpdateQuantity}
-                onRemoveFromOrder={onRemoveFromOrder}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Order Totals and Actions */}
-      {orderItems.length > 0 && (
-        <div className="border-t bg-white p-3 flex-shrink-0">
-          <div className="space-y-1.5 mb-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Subtotal</span>
-              <span className="text-gray-900 font-medium">{formatPrice(subtotal)}</span>
+          ) : (
+            <div className="space-y-2">
+              {orderItems.map((item) => (
+                <OrderItem
+                  key={item.id}
+                  item={item}
+                  onUpdateQuantity={onUpdateQuantity}
+                  onRemoveFromOrder={onRemoveFromOrder}
+                />
+              ))}
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">VAT ({(taxRate * 100).toFixed(0)}%)</span>
-              <span className="text-gray-900 font-medium">{formatPrice(tax)}</span>
+          )}
+        </div>
+
+        {/* Order Totals and Actions */}
+        {orderItems.length > 0 && (
+          <div className="border-t bg-white p-3 flex-shrink-0">
+            <div className="space-y-1.5 mb-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Subtotal</span>
+                <span className="text-gray-900 font-medium">{formatPrice(subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">VAT ({(taxRate * 100).toFixed(0)}%)</span>
+                <span className="text-gray-900 font-medium">{formatPrice(tax)}</span>
+              </div>
+              <div className="flex justify-between text-base font-bold border-t pt-1.5">
+                <span>Total</span>
+                <span className="text-green-600">{formatPrice(total)}</span>
+              </div>
             </div>
-            <div className="flex justify-between text-base font-bold border-t pt-1.5">
-              <span>Total</span>
-              <span className="text-green-600">{formatPrice(total)}</span>
-            </div>
-          </div>
 
-          {/* Action Buttons */}
-          <div className="space-y-2">
-            {/* Add More Items Button for existing orders */}
-            {canAddMoreItems && hasNewItems && (
-              <Button 
-                onClick={onAddMoreItems}
-                disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-              >
-                <Plus className="w-4 h-4" />
-                Add More Items
-              </Button>
-            )}
-
-            {/* Main action button */}
-            {existingOrder?.status === OrderStatus.PENDING ? (
-              <Button 
-                onClick={onSendDraftToKitchen}
-                disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-              >
-                {isSubmittingOrder ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Sending to Kitchen...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    Send Draft to Kitchen
-                  </>
-                )}
-              </Button>
-            ) : existingOrder && existingOrder.status !== OrderStatus.IN_PROGRESS ? (
-              <Button 
-                onClick={onSettleOrder}
-                disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-              >
-                {isSettlingOrder ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Settling Order...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Settle Order
-                  </>
-                )}
-              </Button>
-            ) : (
-              <Button 
-                onClick={onSubmitOrder}
-                disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder || !hasNewItems}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-              >
-                {isSubmittingOrder ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Sending Order...
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4" />
-                    {hasNewItems ? "Send to Kitchen" : "No New Items"}
-                  </>
-                )}
-              </Button>
-            )}
-
-            {/* Secondary buttons */}
-            <div className="grid grid-cols-2 gap-2">
-              {(!existingOrder || existingOrder.status === OrderStatus.PENDING) && hasNewItems && (
+            {/* Action Buttons */}
+            <div className="space-y-2">
+              {/* Add More Items Button for existing orders */}
+              {canAddMoreItems && hasNewItems && (
                 <Button 
-                  onClick={onSaveAsDraft}
+                  onClick={onAddMoreItems}
                   disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                  variant="outline" 
-                  className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                  className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
                 >
-                  <Save className="w-4 h-4" />
-                  Draft
+                  <Plus className="w-4 h-4" />
+                  Add More Items
                 </Button>
               )}
 
-              {!existingOrder && (
+              {/* Main action button */}
+              {existingOrder?.status === OrderStatus.PENDING ? (
                 <Button 
+                  onClick={() => setShowSendDraftDialog(true)}
                   disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                  variant="outline" 
-                  className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
                 >
-                  <Coffee className="w-4 h-4" />
-                  Bar
+                  {isSubmittingOrder ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending to Kitchen...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      Send Draft to Kitchen
+                    </>
+                  )}
+                </Button>
+              ) : existingOrder && existingOrder.status !== OrderStatus.IN_PROGRESS ? (
+                <Button 
+                  onClick={() => setShowSettleDialog(true)}
+                  disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                >
+                  {isSettlingOrder ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Settling Order...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      Settle Order
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button 
+                  onClick={() => hasNewItems ? setShowSendToKitchenDialog(true) : undefined}
+                  disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder || !hasNewItems}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                >
+                  {isSubmittingOrder ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Sending Order...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      {hasNewItems ? "Send to Kitchen" : "No New Items"}
+                    </>
+                  )}
                 </Button>
               )}
 
-              {existingOrder && existingOrder.status !== OrderStatus.PENDING && (
-                <>
+              {/* Secondary buttons */}
+              <div className="grid grid-cols-2 gap-2">
+                {(!existingOrder || existingOrder.status === OrderStatus.PENDING) && hasNewItems && (
                   <Button 
+                    onClick={onSaveAsDraft}
                     disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
                     variant="outline" 
                     className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
                   >
-                    <Receipt className="w-4 h-4" />
-                    Print
+                    <Save className="w-4 h-4" />
+                    Draft
                   </Button>
+                )}
+
+                {!existingOrder && (
                   <Button 
                     disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
                     variant="outline" 
                     className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
                   >
                     <Coffee className="w-4 h-4" />
-                    Add Drinks
+                    Bar
                   </Button>
-                </>
-              )}
+                )}
+
+                {existingOrder && existingOrder.status !== OrderStatus.PENDING && (
+                  <>
+                    <Button 
+                      onClick={() => setShowPrintDialog(true)}
+                      disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                      variant="outline" 
+                      className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Print
+                    </Button>
+                    <Button 
+                      disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                      variant="outline" 
+                      className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                    >
+                      <Coffee className="w-4 h-4" />
+                      Add Drinks
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+
+      {/* Settle Order Confirmation Dialog */}
+      <AlertDialog open={showSettleDialog} onOpenChange={setShowSettleDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-500" />
+              Confirm Order Settlement
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you sure you want to settle this order?</p>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Order Total:</span>
+                  <span className="font-bold text-green-600">{formatPrice(total)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Table:</span>
+                  <span>#{selectedTable?.number}</span>
+                </div>
+                {existingOrder && (
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>Order Number:</span>
+                    <span>{existingOrder.orderNumber}</span>
+                  </div>
+                )}
+              </div>
+              <p className="text-sm text-gray-600">
+                Once settled, this order will be marked as completed and cannot be modified.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleSettleOrder}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Settle Order
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Print Receipt Confirmation Dialog */}
+      <AlertDialog open={showPrintDialog} onOpenChange={setShowPrintDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Printer className="w-5 h-5 text-blue-500" />
+              Print Receipt
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Do you want to print the receipt for this order?</p>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Order Total:</span>
+                  <span className="font-bold text-green-600">{formatPrice(total)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Table:</span>
+                  <span>#{selectedTable?.number}</span>
+                </div>
+                {existingOrder && (
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>Order Number:</span>
+                    <span>{existingOrder.orderNumber}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Items:</span>
+                  <span>{orderItems.length} item{orderItems.length !== 1 ? 's' : ''}</span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                This will send the receipt to the default printer.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handlePrintReceipt}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Printer className="w-4 h-4 mr-2" />
+              Print Receipt
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Send to Kitchen Confirmation Dialog */}
+      <AlertDialog open={showSendToKitchenDialog} onOpenChange={setShowSendToKitchenDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5 text-blue-500" />
+              Send Order to Kitchen
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you ready to send this order to the kitchen?</p>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Order Total:</span>
+                  <span className="font-bold text-green-600">{formatPrice(total)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Table:</span>
+                  <span>#{selectedTable?.number}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>New Items:</span>
+                  <span>{orderItems.filter(item => !item.isExistingItem).length} item{orderItems.filter(item => !item.isExistingItem).length !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Customer Count:</span>
+                  <span>{customerCount || 1} customer{(customerCount || 1) > 1 ? 's' : ''}</span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                Once sent, the kitchen will begin preparing the order items.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleSendToKitchen}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Send to Kitchen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Send Draft to Kitchen Confirmation Dialog */}
+      <AlertDialog open={showSendDraftDialog} onOpenChange={setShowSendDraftDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5 text-blue-500" />
+              Send Draft Order to Kitchen
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>Are you ready to send this draft order to the kitchen?</p>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Order Total:</span>
+                  <span className="font-bold text-green-600">{formatPrice(total)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Table:</span>
+                  <span>#{selectedTable?.number}</span>
+                </div>
+                {existingOrder && (
+                  <div className="flex justify-between items-center text-sm text-gray-600">
+                    <span>Order Number:</span>
+                    <span>{existingOrder.orderNumber}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Items:</span>
+                  <span>{orderItems.length} item{orderItems.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-gray-600">
+                  <span>Customer Count:</span>
+                  <span>{customerCount || 1} customer{(customerCount || 1) > 1 ? 's' : ''}</span>
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                This will change the order status from draft to active and the kitchen will begin preparation.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleSendDraftToKitchen}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Send to Kitchen
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 })
 
