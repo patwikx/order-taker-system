@@ -58,6 +58,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
+import { useRouter } from "next/navigation"
 import {
   createUser,
   updateUser,
@@ -617,6 +618,7 @@ export function UserManagement({
   roles,
   permissions,
 }: UserManagementProps) {
+  const router = useRouter()
   const [users, setUsers] = useState<UserWithAssignments[]>(initialUsers)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -1103,6 +1105,14 @@ export function UserManagement({
                                   {assignment.role.displayName}
                                 </Badge>
                               ))
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    router.push(`/${businessUnitId}/admin/users/${user.id}`)
+                                  }}
+                                >
+                                  <Key className="w-4 h-4 mr-2" />
+                                  Manage Permissions
+                                </DropdownMenuItem>
                             )}
                             {user.userBusinessUnitRole.length > 2 && (
                               <Badge variant="outline" className="text-xs">
