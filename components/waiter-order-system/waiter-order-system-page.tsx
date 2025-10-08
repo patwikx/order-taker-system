@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { toast } from "sonner"
+import { useSession } from "next-auth/react"
 
 import { OrderStatus, TableStatus } from "@prisma/client"
 
@@ -22,6 +23,7 @@ import type { MenuItemWithCategory } from "@/lib/actions/menu-actions"
 import type { BusinessUnitDetails } from "@/lib/actions/business-unit-actions"
 import type { OrderWithDetails } from "@/lib/actions/order-actions"
 import { useOrderStore } from "@/hooks/order-store"
+import { usePrinter } from "@/hooks/use-printer"
 
 // Components
 import { TableGrid } from "./table-grid"
@@ -97,11 +99,24 @@ const WaiterOrderSystem = ({ businessUnitId, initialData }: Props) => {
     clearOrder,
     setSubmittingOrder,
     setClearingOrder,
-    loadExistingOrderItems, // Add this new function
+    loadExistingOrderItems,
     getSubtotal,
     getTax,
     getTotal,
   } = useOrderStore()
+
+  // Printer hook
+  const { printOrderDetails, printNewItems, printError } = usePrinter()
+
+  // Current session
+  const { data: session } = useSession()
+
+  // Show print errors
+  useEffect(() => {
+    if (printError) {
+      toast.error(`Printer Error: ${printError}`)
+    }
+  }, [printError])
 
   // Memoized selected table info
   const selectedTableInfo = useMemo(() => 
@@ -240,21 +255,20 @@ const loadExistingOrder = useCallback(async (tableId: string) => {
 // Replace the existing handleAddMoreItems function with this:
 
 const handleAddMoreItems = useCallback(async () => {
-  if (!existingOrder) {
+  if (!existingOrder || !initialData.businessUnit || !selectedTableInfo) {
     toast.error("No existing order found")
     return
   }
 
-  // Filter to only get NEW items (not existing items from the order)
   const newItemsOnly = orderItems.filter(item => !item.isExistingItem)
-  
+
   if (newItemsOnly.length === 0) {
     toast.error("No new items to add")
     return
   }
 
   setSubmittingOrder(true)
-  
+
   try {
     const itemsToAdd = newItemsOnly.map(item => ({
       menuItemId: item.menuItem.id,
@@ -263,14 +277,31 @@ const handleAddMoreItems = useCallback(async () => {
     }))
 
     const result = await addItemsToOrder(businessUnitId, existingOrder.id, itemsToAdd)
-    
+
     if (result.success) {
       toast.success(`${newItemsOnly.length} new item(s) added to order successfully!`)
-      
-      // Clear only the NEW items, keep existing items in the UI
-      // Or you can reload the entire order to show the updated state
+
+      try {
+        await printNewItems(
+          existingOrder.orderNumber,
+          selectedTableInfo.number,
+          newItemsOnly.map(item => ({
+            name: item.menuItem.name,
+            quantity: item.quantity,
+            notes: item.notes,
+            type: item.menuItem.type
+          })),
+          initialData.businessUnit,
+          session?.user?.name,
+          customerCount
+        )
+        toast.success("Order details sent to printer")
+      } catch (printErr) {
+        console.error("Print error:", printErr)
+        toast.warning("Order added but printing failed. Please print manually if needed.")
+      }
+
       await loadExistingOrder(selectedTableId!)
-      
       await refreshTables()
     } else {
       toast.error(result.error || "Failed to add items to order")
@@ -281,17 +312,16 @@ const handleAddMoreItems = useCallback(async () => {
   } finally {
     setSubmittingOrder(false)
   }
-}, [existingOrder, orderItems, businessUnitId, loadExistingOrder, selectedTableId, refreshTables, setSubmittingOrder])
+}, [existingOrder, orderItems, businessUnitId, loadExistingOrder, selectedTableId, refreshTables, setSubmittingOrder, initialData.businessUnit, selectedTableInfo, printNewItems, session, customerCount])
 
-  // Submit order - optimized
   const handleSubmitOrder = useCallback(async () => {
-    if (!selectedTableId || orderItems.length === 0) {
+    if (!selectedTableId || orderItems.length === 0 || !initialData.businessUnit) {
       toast.error("Please select a table and add items to the order")
       return
     }
 
     setSubmittingOrder(true)
-    
+
     try {
       const orderData = {
         tableId: selectedTableId,
@@ -313,9 +343,18 @@ const handleAddMoreItems = useCallback(async () => {
       } else {
         result = await createOrder(businessUnitId, orderData, false)
       }
-      
-      if (result.success) {
+
+      if (result.success && result.order) {
         toast.success(uiState.isEditingOrder ? "Order updated successfully!" : "Order sent to kitchen/bar successfully!")
+
+        try {
+          await printOrderDetails(result.order, initialData.businessUnit, session?.user?.name)
+          toast.success("Order details sent to printer")
+        } catch (printErr) {
+          console.error("Print error:", printErr)
+          toast.warning("Order created but printing failed. Please print manually if needed.")
+        }
+
         clearOrder()
         setUIState(prev => ({ ...prev, isEditingOrder: false }))
         setExistingOrder(null)
@@ -329,7 +368,7 @@ const handleAddMoreItems = useCallback(async () => {
     } finally {
       setSubmittingOrder(false)
     }
-  }, [selectedTableId, orderItems, uiState.selectedCustomerId, uiState.isEditingOrder, isWalkIn, walkInName, customerCount, orderNotes, existingOrder, businessUnitId, clearOrder, refreshTables, setSubmittingOrder])
+  }, [selectedTableId, orderItems, uiState.selectedCustomerId, uiState.isEditingOrder, isWalkIn, walkInName, customerCount, orderNotes, existingOrder, businessUnitId, clearOrder, refreshTables, setSubmittingOrder, initialData.businessUnit, printOrderDetails, session])
 
   // Save as draft
   const handleSaveAsDraft = useCallback(async () => {
@@ -409,26 +448,33 @@ const handleAddMoreItems = useCallback(async () => {
     }
   }, [existingOrder, selectedTableId, businessUnitId, clearOrder, refreshTables, updateUIState])
 
-  // Send draft to kitchen
   const handleSendDraftToKitchen = useCallback(async () => {
-    if (!existingOrder || existingOrder.status !== OrderStatus.PENDING) {
+    if (!existingOrder || existingOrder.status !== OrderStatus.PENDING || !initialData.businessUnit) {
       toast.error("Order is not a draft")
       return
     }
 
     setSubmittingOrder(true)
-    
+
     try {
       const result = await sendOrderToKitchenAndBar(existingOrder.id, businessUnitId)
-      
+
       if (result.success) {
         toast.success("Draft order sent to kitchen successfully!")
-        
+
         const updatedOrderData = await getOrder(businessUnitId, existingOrder.id)
         if (updatedOrderData) {
           setExistingOrder(updatedOrderData)
+
+          try {
+            await printOrderDetails(updatedOrderData, initialData.businessUnit, session?.user?.name)
+            toast.success("Order details sent to printer")
+          } catch (printErr) {
+            console.error("Print error:", printErr)
+            toast.warning("Order sent but printing failed. Please print manually if needed.")
+          }
         }
-        
+
         await refreshTables()
       } else {
         toast.error(result.error || "Failed to send draft order to kitchen")
@@ -439,7 +485,7 @@ const handleAddMoreItems = useCallback(async () => {
     } finally {
       setSubmittingOrder(false)
     }
-  }, [existingOrder, businessUnitId, refreshTables, setSubmittingOrder])
+  }, [existingOrder, businessUnitId, refreshTables, setSubmittingOrder, initialData.businessUnit, printOrderDetails, session])
 
   // Handle table selection
   const handleTableSelect = useCallback((tableId: string) => {

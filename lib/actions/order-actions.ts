@@ -301,6 +301,11 @@ export async function createOrder(
     const convertedOrder = convertOrderDecimals(order)
     const finalOrder = {
       ...convertedOrder,
+      customerId: order.customerId ?? undefined,
+      notes: order.notes ?? undefined,
+      walkInName: order.walkInName ?? undefined,
+      completedAt: order.completedAt ?? undefined,
+      customerCount: order.customerCount ?? undefined,
       table: {
         ...order.table,
         location: order.table.location ?? undefined
@@ -328,7 +333,7 @@ export async function createOrder(
     }
 
     revalidatePath(`/${businessUnitId}`)
-    return { success: true, order: finalOrder }
+    return { success: true, order: finalOrder as OrderWithDetails }
   } catch (error) {
     console.error("Error creating order:", error)
     return { 
@@ -638,7 +643,7 @@ export async function updateOrder(
     }
 
     revalidatePath(`/${businessUnitId}`)
-    return { success: true, order: finalOrder }
+    return { success: true, order: finalOrder as OrderWithDetails }
   } catch (error) {
     console.error("Error updating order:", error)
     return { 
@@ -700,6 +705,11 @@ export async function getOrder(businessUnitId: string, orderId: string): Promise
     const convertedOrder = convertOrderDecimals(order)
     const finalOrder = {
       ...convertedOrder,
+      customerId: order.customerId ?? undefined,
+      notes: order.notes ?? undefined,
+      walkInName: order.walkInName ?? undefined,
+      completedAt: order.completedAt ?? undefined,
+      customerCount: order.customerCount ?? undefined,
       table: {
         ...order.table,
         location: order.table.location ?? undefined
@@ -886,7 +896,7 @@ export async function addItemsToOrder(
     }
 
     revalidatePath(`/${businessUnitId}`)
-    return { success: true, order: finalOrder }
+    return { success: true, order: finalOrder as OrderWithDetails }
   } catch (error) {
     console.error("Error adding items to order:", error)
     return { 
