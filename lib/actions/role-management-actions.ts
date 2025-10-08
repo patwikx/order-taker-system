@@ -66,6 +66,11 @@ export interface AssignRolePermissionInput {
   permissionId: string
 }
 
+// Add missing interface for role permission management
+interface RolePermissionManagementProps {
+  businessUnitId: string
+}
+
 // Get all roles with their permissions and assignment counts
 export async function getRoles(): Promise<{
   success: boolean
