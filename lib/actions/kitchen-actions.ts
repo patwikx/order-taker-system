@@ -549,3 +549,112 @@ export async function removeCompletedOrders(businessUnitId: string) {
     return { success: false, error: "Failed to remove completed orders" }
   }
 }
+// Get active order counts for navigation badges
+export async function getActiveOrderCounts(businessUnitId: string) {
+  try {
+    // Get base order numbers for this business unit
+    const baseOrderNumbers = await prisma.order.findMany({
+      where: { businessUnitId },
+      select: { orderNumber: true }
+    }).then(orders => orders.map(o => o.orderNumber))
+
+    // Create array that includes both base orders and their additional orders
+    const allOrderNumbers: string[] = []
+    
+    for (const orderNumber of baseOrderNumbers) {
+      allOrderNumbers.push(orderNumber) // Base order
+      allOrderNumbers.push(`${orderNumber}-ADD`) // Additional items order
+    }
+
+    // Count active kitchen orders
+    const kitchenOrderCount = await prisma.kitchenOrder.count({
+      where: {
+        orderNumber: {
+          in: allOrderNumbers
+        },
+        status: {
+          in: [KitchenOrderStatus.PENDING, KitchenOrderStatus.PREPARING, KitchenOrderStatus.READY]
+        }
+      }
+    })
+
+    // Count active bar orders
+    const barOrderCount = await prisma.barOrder.count({
+      where: {
+        orderNumber: {
+          in: allOrderNumbers
+        },
+        status: {
+          in: ['PENDING', 'PREPARING', 'READY']
+        }
+      }
+    })
+
+    return {
+      success: true,
+      kitchenOrders: kitchenOrderCount,
+      barOrders: barOrderCount,
+      totalOrders: kitchenOrderCount + barOrderCount
+    }
+  } catch (error) {
+    console.error("Error getting active order counts:", error)
+    return {
+      success: false,
+      kitchenOrders: 0,
+      barOrders: 0,
+      totalOrders: 0
+    }
+  }
+}
+
+// Get ready orders for waiter notification
+export async function getReadyOrdersForWaiter(businessUnitId: string) {
+  try {
+    // Get base order numbers for this business unit
+    const baseOrderNumbers = await prisma.order.findMany({
+      where: { businessUnitId },
+      select: { orderNumber: true }
+    }).then(orders => orders.map(o => o.orderNumber))
+
+    // Create array that includes both base orders and their additional orders
+    const allOrderNumbers: string[] = []
+    
+    for (const orderNumber of baseOrderNumbers) {
+      allOrderNumbers.push(orderNumber) // Base order
+      allOrderNumbers.push(`${orderNumber}-ADD`) // Additional items order
+    }
+
+    const readyOrders = await prisma.kitchenOrder.findMany({
+      where: {
+        orderNumber: {
+          in: allOrderNumbers
+        },
+        status: KitchenOrderStatus.READY
+      },
+      orderBy: {
+        completedAt: 'asc'
+      }
+    })
+
+    return {
+      success: true,
+      orders: readyOrders.map(ko => ({
+        id: ko.id,
+        orderNumber: ko.orderNumber,
+        tableNumber: ko.tableNumber,
+        waiterName: ko.waiterName,
+        itemCount: transformToKitchenOrderItems(ko.items).length,
+        completedAt: ko.completedAt,
+        items: transformToKitchenOrderItems(ko.items),
+        isAdditionalItems: ko.orderNumber.includes('-ADD')
+      }))
+    }
+  } catch (error) {
+    console.error("Error getting ready orders:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to get ready orders",
+      orders: []
+    }
+  }
+}

@@ -301,6 +301,11 @@ export async function createOrder(
     const convertedOrder = convertOrderDecimals(order)
     const finalOrder = {
       ...convertedOrder,
+      customerId: order.customerId ?? undefined,
+      notes: order.notes ?? undefined,
+      walkInName: order.walkInName ?? undefined,
+      completedAt: order.completedAt ?? undefined,
+      customerCount: order.customerCount ?? undefined,
       table: {
         ...order.table,
         location: order.table.location ?? undefined
@@ -328,7 +333,7 @@ export async function createOrder(
     }
 
     revalidatePath(`/${businessUnitId}`)
-    return { success: true, order: finalOrder }
+    return { success: true, order: finalOrder as OrderWithDetails }
   } catch (error) {
     console.error("Error creating order:", error)
     return { 
@@ -638,7 +643,7 @@ export async function updateOrder(
     }
 
     revalidatePath(`/${businessUnitId}`)
-    return { success: true, order: finalOrder }
+    return { success: true, order: finalOrder as OrderWithDetails }
   } catch (error) {
     console.error("Error updating order:", error)
     return { 
@@ -700,6 +705,11 @@ export async function getOrder(businessUnitId: string, orderId: string): Promise
     const convertedOrder = convertOrderDecimals(order)
     const finalOrder = {
       ...convertedOrder,
+      customerId: order.customerId ?? undefined,
+      notes: order.notes ?? undefined,
+      walkInName: order.walkInName ?? undefined,
+      completedAt: order.completedAt ?? undefined,
+      customerCount: order.customerCount ?? undefined,
       table: {
         ...order.table,
         location: order.table.location ?? undefined
@@ -886,7 +896,7 @@ export async function addItemsToOrder(
     }
 
     revalidatePath(`/${businessUnitId}`)
-    return { success: true, order: finalOrder }
+    return { success: true, order: finalOrder as OrderWithDetails }
   } catch (error) {
     console.error("Error adding items to order:", error)
     return { 
@@ -1007,13 +1017,33 @@ export async function completeOrder(businessUnitId: string, orderId: string) {
     const order = await prisma.order.findFirst({
       where: {
         id: orderId,
-        businessUnitId,
-        status: { in: [OrderStatus.READY, OrderStatus.SERVED] }
+        businessUnitId
       }
     })
 
     if (!order) {
-      throw new Error("Order not found or cannot be completed")
+      throw new Error("Order not found")
+    }
+
+    // Check if order can be completed based on status
+    if (order.status === OrderStatus.PENDING) {
+      throw new Error("Cannot settle a draft order. Please send it to the kitchen first.")
+    }
+
+    if (order.status === OrderStatus.CONFIRMED || order.status === OrderStatus.IN_PROGRESS) {
+      throw new Error("Order is still being prepared. Please wait until all items are ready before settling.")
+    }
+
+    if (order.status === OrderStatus.COMPLETED) {
+      throw new Error("This order has already been settled.")
+    }
+
+    if (order.status === OrderStatus.CANCELLED) {
+      throw new Error("Cannot settle a cancelled order.")
+    }
+
+    if (order.status !== OrderStatus.READY && order.status !== OrderStatus.SERVED) {
+      throw new Error(`Order cannot be settled in ${order.status} status.`)
     }
 
     await prisma.$transaction(async (tx) => {

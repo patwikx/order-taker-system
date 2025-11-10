@@ -7,6 +7,7 @@ import "../globals.css";
 import { Toaster } from 'sonner';
 import { BusinessUnitProvider } from '@/context/business-unit-context';
 import { Header } from '@/components/header';
+import { getActiveOrderCounts } from '@/lib/actions/kitchen-actions';
 
 export const metadata = {
   title: "Tropicana Worldwide Corp.",
@@ -94,6 +95,9 @@ export default async function DashboardLayout({
                    session.user.assignments.find(a => a.isActive)?.role.name || 
                    'GUEST';
 
+  // Get active order counts for navigation badges
+  const orderCounts = await getActiveOrderCounts(businessUnitId);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header - Fixed at top */}
@@ -102,6 +106,8 @@ export default async function DashboardLayout({
         businessUnits={businessUnits}
         isAdmin={isAdmin}
         userRole={userRole}
+        kitchenOrderCount={orderCounts.kitchenOrders}
+        barOrderCount={orderCounts.barOrders}
       />
 
       {/* Main Content Area */}

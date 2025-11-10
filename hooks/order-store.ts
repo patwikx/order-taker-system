@@ -63,6 +63,7 @@ export interface OrderState {
   
   // Computed values
   getSubtotal: () => number
+  getServiceCharge: (serviceChargeRate?: number) => number
   getTax: (taxRate: number) => number
   getTotal: (taxRate: number) => number
   getItemCount: () => number
@@ -208,13 +209,21 @@ export const useOrderStore = create<OrderState>((set, get) => ({
     return orderItems.reduce((sum, item) => sum + (item.menuItem.price * item.quantity), 0)
   },
 
+  getServiceCharge: (serviceChargeRate: number = 0.10) => {
+    return get().getSubtotal() * serviceChargeRate
+  },
+
   getTax: (taxRate: number) => {
-    return get().getSubtotal() * taxRate
+    const subtotal = get().getSubtotal()
+    const serviceCharge = get().getServiceCharge()
+    return (subtotal + serviceCharge) * taxRate
   },
 
   getTotal: (taxRate: number) => {
     const subtotal = get().getSubtotal()
-    return subtotal + (subtotal * taxRate)
+    const serviceCharge = get().getServiceCharge()
+    const tax = get().getTax(taxRate)
+    return subtotal + serviceCharge + tax
   },
 
   getItemCount: () => {

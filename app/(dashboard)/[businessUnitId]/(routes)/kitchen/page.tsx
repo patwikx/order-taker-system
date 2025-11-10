@@ -45,11 +45,55 @@ const KitchenDisplayPage = () => {
   const [processingOrderId, setProcessingOrderId] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [showCompletedOrders, setShowCompletedOrders] = useState(false)
+  const [previousPendingCount, setPreviousPendingCount] = useState(0)
+
+  // Play notification sound
+  const playNotificationSound = useCallback(() => {
+    try {
+      // Create audio context
+      const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      
+      // Create oscillator for a pleasant notification sound
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+      
+      // Configure sound - pleasant bell-like tone
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime) // First tone
+      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1) // Second tone
+      
+      // Volume envelope
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
+      
+      // Play sound
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.5)
+    } catch (error) {
+      console.error("Error playing notification sound:", error)
+    }
+  }, [])
 
   // Load kitchen orders - wrapped in useCallback
   const loadKitchenOrders = useCallback(async () => {
     try {
       const orders = await getKitchenOrders(businessUnitId)
+      
+      // Check for new pending orders
+      const currentPendingCount = orders.filter(o => o.status === KitchenOrderStatus.PENDING).length
+      
+      // Play sound if there are new pending orders (and not initial load)
+      if (!isLoading && currentPendingCount > previousPendingCount) {
+        playNotificationSound()
+        toast.success(`New order received! ${currentPendingCount} pending order${currentPendingCount > 1 ? 's' : ''}`, {
+          duration: 5000,
+        })
+      }
+      
+      setPreviousPendingCount(currentPendingCount)
       setKitchenOrders(orders)
     } catch (error) {
       console.error("Error loading kitchen orders:", error)
@@ -57,7 +101,7 @@ const KitchenDisplayPage = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [businessUnitId])
+  }, [businessUnitId, isLoading, previousPendingCount, playNotificationSound])
 
   // Load completed orders
   const loadCompletedOrders = useCallback(async () => {
@@ -263,21 +307,21 @@ const KitchenDisplayPage = () => {
 
         <CardContent className="px-3 pb-3 space-y-2">
           {/* Order Items */}
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             {order.items.map((item, index) => (
-              <div key={index} className="flex justify-between items-start text-xs bg-gray-50 p-2 rounded">
+              <div key={index} className="flex justify-between items-center bg-gray-50 p-3 rounded">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 truncate">{item.name}</div>
+                  <div className="font-bold text-lg text-gray-900 leading-tight">{item.name}</div>
                   {item.notes && (
-                    <div className="text-blue-600 mt-1 text-xs">
+                    <div className="text-gray-600 mt-1 text-sm font-medium">
                       {item.notes}
                     </div>
                   )}
                 </div>
-                <div className="text-right ml-2 flex-shrink-0">
-                  <div className="font-bold">×{item.quantity}</div>
+                <div className="ml-4 flex-shrink-0 flex items-center gap-3">
+                  <div className="font-bold text-lg text-gray-900">×{item.quantity}</div>
                   {item.prepTime && (
-                    <div className="text-gray-500">{item.prepTime}m</div>
+                    <div className="font-bold text-lg text-gray-900">{item.prepTime}m</div>
                   )}
                 </div>
               </div>
@@ -316,9 +360,9 @@ const KitchenDisplayPage = () => {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-gray-50 p-4 overflow-hidden">
+    <div className="h-screen bg-gray-50 p-4 overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="mb-4">
+      <div className="mb-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
@@ -360,7 +404,7 @@ const KitchenDisplayPage = () => {
                     </div>
                   ) : (
                     completedOrders.map((order) => (
-                      <Card key={order.id} className="border border-gray-200">
+                      <Card key={order.id} className="border border-gray-200 mr-4 ml-4">
                         <CardHeader className="pb-2">
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-base font-bold flex items-center gap-2">
@@ -434,7 +478,7 @@ const KitchenDisplayPage = () => {
 
       {/* Column Layout */}
       {kitchenOrders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-96">
+        <div className="flex flex-col items-center justify-center flex-1">
           <div className="p-4 bg-gray-100 rounded-full mb-4">
             <Utensils className="w-8 h-8 text-gray-400" />
           </div>
@@ -444,10 +488,10 @@ const KitchenDisplayPage = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-4 h-[calc(100%-120px)]">
+        <div className="grid grid-cols-3 gap-4 flex-1 min-h-0">
           {/* Pending Orders Column */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="bg-yellow-100 p-3 border-b border-yellow-200">
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
+            <div className="bg-yellow-100 p-3 border-b border-yellow-200 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-yellow-600" />
@@ -458,7 +502,7 @@ const KitchenDisplayPage = () => {
                 </Badge>
               </div>
             </div>
-            <div className="p-3 overflow-y-auto h-[calc(100%-60px)]">
+            <div className="p-3 overflow-y-auto flex-1">
               {ordersByStatus.pending.length === 0 ? (
                 <div className="text-center text-gray-500 text-sm mt-8">
                   No pending orders
@@ -470,8 +514,8 @@ const KitchenDisplayPage = () => {
           </div>
 
           {/* Preparing Orders Column */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="bg-blue-100 p-3 border-b border-blue-200">
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
+            <div className="bg-blue-100 p-3 border-b border-blue-200 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Timer className="w-4 h-4 text-blue-600" />
@@ -482,7 +526,7 @@ const KitchenDisplayPage = () => {
                 </Badge>
               </div>
             </div>
-            <div className="p-3 overflow-y-auto h-[calc(100%-60px)]">
+            <div className="p-3 overflow-y-auto flex-1">
               {ordersByStatus.preparing.length === 0 ? (
                 <div className="text-center text-gray-500 text-sm mt-8">
                   No orders in preparation
@@ -494,8 +538,8 @@ const KitchenDisplayPage = () => {
           </div>
 
           {/* Ready Orders Column */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="bg-green-100 p-3 border-b border-green-200">
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
+            <div className="bg-green-100 p-3 border-b border-green-200 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-green-600" />
@@ -506,7 +550,7 @@ const KitchenDisplayPage = () => {
                 </Badge>
               </div>
             </div>
-            <div className="p-3 overflow-y-auto h-[calc(100%-60px)]">
+            <div className="p-3 overflow-y-auto flex-1">
               {ordersByStatus.ready.length === 0 ? (
                 <div className="text-center text-gray-500 text-sm mt-8">
                   No orders ready

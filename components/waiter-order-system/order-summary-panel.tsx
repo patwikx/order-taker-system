@@ -8,8 +8,7 @@ import {
   Receipt, 
   UserX, 
   UserCheck, 
-  Plus, 
-  Minus, 
+  Plus,  
   Trash2, 
   Send, 
   Save, 
@@ -19,7 +18,8 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
-  Printer
+  Printer,
+  XCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,14 +55,14 @@ interface OrderSummaryPanelProps {
   isClearingOrder: boolean
   businessUnit: BusinessUnitDetails | null
   currentTime: Date
-  // Added the calculation functions
   getSubtotal: () => number
+  getServiceCharge: (serviceChargeRate?: number) => number
   getTax: (taxRate: number) => number
   getTotal: (taxRate: number) => number
   onCustomerTypeChange: (isWalkIn: boolean) => void
   onCustomerCountChange: (count: number) => void
   onOrderNotesChange: (notes: string) => void
-  onWalkInNameChange: (name: string) => void // Added this prop
+  onWalkInNameChange: (name: string) => void
   onUpdateQuantity: (itemId: string, change: number) => void
   onRemoveFromOrder: (itemId: string) => void
   onSubmitOrder: () => void
@@ -71,7 +71,8 @@ interface OrderSummaryPanelProps {
   onSendDraftToKitchen: () => void
   onClearAll: () => void
   onAddMoreItems: () => void
-  onPrintReceipt?: () => void // Added print handler
+  onPrintReceipt: () => void
+  onCancelOrder: () => void
 }
 
 const ImageWithFallback = memo(({ 
@@ -133,11 +134,9 @@ const getItemStatusInfo = (status: OrderItemStatus) => {
 
 const OrderItem = memo(({ 
   item, 
-  onUpdateQuantity, 
   onRemoveFromOrder 
 }: { 
   item: CartItem
-  onUpdateQuantity: (itemId: string, change: number) => void
   onRemoveFromOrder: (itemId: string) => void
 }) => {
   const statusInfo = getItemStatusInfo(item.status)
@@ -145,14 +144,13 @@ const OrderItem = memo(({
   const formatPrice = useCallback((price: number) => `₱${price.toFixed(2)}`, [])
 
   return (
-    <div className={`rounded-lg p-2.5 border ${
+    <div className={`rounded p-1.5 border ${
       item.isExistingItem 
-        ? 'bg-blue-50 border-blue-200' // Blue background for existing items
-        : 'bg-gray-50 border-gray-200'  // Gray background for new items
+        ? 'bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200'
+        : 'bg-white border-gray-200'
     }`}>
-      <div className="flex gap-2.5 mb-2">
-        {/* Item Image */}
-        <div className="w-12 h-12 bg-gray-100 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden">
+      <div className="flex gap-1.5 items-center">
+        <div className="w-8 h-8 bg-gray-100 rounded flex-shrink-0 flex items-center justify-center overflow-hidden">
           <ImageWithFallback
             src={item.menuItem.imageUrl}
             alt={item.menuItem.name}
@@ -162,92 +160,38 @@ const OrderItem = memo(({
           />
         </div>
 
-        {/* Item Details */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h4 className="font-medium text-gray-900 text-sm truncate">{item.menuItem.name}</h4>
-                {item.isExistingItem && (
-                  <span className="bg-blue-600 text-white px-1.5 py-0.5 rounded-full text-xs font-medium">
-                    Preparing
-                  </span>
-                )}
-                {!item.isExistingItem && (
-                  <span className="bg-green-600 text-white px-1.5 py-0.5 rounded-full text-xs font-medium">
-                    New
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`px-1.5 py-0.5 rounded-full text-xs font-medium flex items-center gap-1 ${statusInfo.color}`}
-                >
-                  <StatusIcon className="w-2.5 h-2.5" />
-                  {statusInfo.text}
-                </span>
-                {item.estimatedTime && (
-                  <div className="flex items-center gap-1 text-xs text-blue-500">
-                    <Clock className="h-3 w-3" />
-                    <span>{item.estimatedTime}m</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="text-right ml-2">
-              <div className="font-semibold text-gray-900 text-sm">
-                {formatPrice(item.menuItem.price * item.quantity)}
-              </div>
-              <div className="text-xs text-gray-500">{formatPrice(item.menuItem.price)} each</div>
+          <div className="flex items-center justify-between gap-1">
+            <h4 className="font-medium text-gray-900 text-xs leading-tight truncate">{item.menuItem.name}</h4>
+            <span className="px-1.5 py-0.5 bg-gray-200 text-gray-700 rounded-full text-xs font-medium flex-shrink-0">
+              x{item.quantity}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-1 mt-0.5">
+            <span
+              className={`px-1 py-0.5 rounded text-[10px] font-medium flex items-center gap-0.5 ${statusInfo.color}`}
+            >
+              <StatusIcon className="w-2 h-2" />
+              {statusInfo.text}
+            </span>
+            <div className="font-semibold text-gray-900 text-xs">
+              {formatPrice(item.menuItem.price * item.quantity)}
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onUpdateQuantity(item.id, -1)}
-            disabled={item.isExistingItem} // Disable quantity changes for existing items
-            className={`w-6 h-6 border border-gray-300 rounded flex items-center justify-center transition-colors ${
-              item.isExistingItem 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : 'bg-white hover:bg-gray-50'
-            }`}
-          >
-            <Minus className="w-3 h-3" />
-          </button>
-          <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-          <button
-            onClick={() => onUpdateQuantity(item.id, 1)}
-            disabled={item.isExistingItem} // Disable quantity changes for existing items
-            className={`w-6 h-6 border border-gray-300 rounded flex items-center justify-center transition-colors ${
-              item.isExistingItem 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : 'bg-white hover:bg-gray-50'
-            }`}
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        </div>
         <button 
           onClick={() => onRemoveFromOrder(item.id)}
-          disabled={item.isExistingItem} // Disable removal for existing items
-          className={`p-1.5 rounded-md transition-colors ${
+          disabled={item.isExistingItem}
+          className={`p-0.5 rounded transition-colors flex-shrink-0 ${
             item.isExistingItem 
               ? 'text-gray-400 cursor-not-allowed' 
               : 'text-red-500 hover:bg-red-50'
           }`}
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-3 h-3" />
         </button>
       </div>
-      
-      {item.isExistingItem && (
-        <div className="mt-2 text-xs text-blue-600 bg-blue-100 rounded px-2 py-1">
-          This item is from the existing order and cannot be modified here
-        </div>
-      )}
     </div>
   )
 })
@@ -270,13 +214,13 @@ export const OrderSummaryPanel = memo(({
   businessUnit,
   currentTime,
   getSubtotal,
+  getServiceCharge,
   getTax,
   getTotal,
   onCustomerTypeChange,
   onCustomerCountChange,
   onOrderNotesChange,
-  onWalkInNameChange, // Added this prop
-  onUpdateQuantity,
+  onWalkInNameChange,
   onRemoveFromOrder,
   onSubmitOrder,
   onSaveAsDraft,
@@ -284,18 +228,19 @@ export const OrderSummaryPanel = memo(({
   onSendDraftToKitchen,
   onClearAll,
   onAddMoreItems,
-  onPrintReceipt
+  onPrintReceipt,
+  onCancelOrder
 }: OrderSummaryPanelProps) => {
   const formatPrice = useCallback((price: number) => `₱${price.toFixed(2)}`, [])
-  const [isCustomerInfoCollapsed, setIsCustomerInfoCollapsed] = useState(false)
+  const [isCustomerInfoCollapsed, setIsCustomerInfoCollapsed] = useState(true)
   const [showSettleDialog, setShowSettleDialog] = useState(false)
   const [showPrintDialog, setShowPrintDialog] = useState(false)
   const [showSendToKitchenDialog, setShowSendToKitchenDialog] = useState(false)
   const [showSendDraftDialog, setShowSendDraftDialog] = useState(false)
 
-  // Use the calculation functions from the store instead of manual calculation
   const subtotal = getSubtotal()
-  const taxRate = businessUnit?.taxRate || 0.12 // Default to 12% if no business unit
+  const serviceCharge = getServiceCharge()
+  const taxRate = businessUnit?.taxRate || 0.12
   const tax = getTax(taxRate)
   const total = getTotal(taxRate)
 
@@ -304,7 +249,6 @@ export const OrderSummaryPanel = memo(({
     existingOrder.status !== OrderStatus.COMPLETED &&
     existingOrder.status !== OrderStatus.CANCELLED
 
-  // Check if there are any new items to add
   const hasNewItems = orderItems.some(item => !item.isExistingItem)
 
   const handleSettleOrder = () => {
@@ -314,9 +258,7 @@ export const OrderSummaryPanel = memo(({
 
   const handlePrintReceipt = () => {
     setShowPrintDialog(false)
-    if (onPrintReceipt) {
-      onPrintReceipt()
-    }
+    onPrintReceipt()
   }
 
   const handleSendToKitchen = () => {
@@ -331,8 +273,7 @@ export const OrderSummaryPanel = memo(({
 
   return (
     <>
-      <div className="w-96 bg-white border-l shadow-sm flex flex-col h-full relative">
-        {/* Loading Overlay */}
+      <div className="w-80 md:w-96 lg:w-80 xl:w-96 bg-white border-l shadow-sm flex flex-col h-full max-h-screen min-h-0 overflow-hidden relative">
         {(isSubmittingOrder || isClearingOrder || isLoadingOrder || isSettlingOrder) && (
           <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-50">
             <div className="flex flex-col items-center gap-3">
@@ -350,8 +291,7 @@ export const OrderSummaryPanel = memo(({
           </div>
         )}
         
-        {/* Header */}
-        <div className="p-3 border-b bg-gradient-to-r from-purple-50 to-blue-50 flex-shrink-0">
+        <div className="p-1.5 border-b bg-gradient-to-r from-purple-50 to-blue-50 flex-shrink-0 min-h-0">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-purple-100 rounded-lg">
@@ -364,10 +304,7 @@ export const OrderSummaryPanel = memo(({
                 <p className="text-xs text-gray-600">{orderItems.length} items selected</p>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-base font-bold text-green-600">{formatPrice(total)}</div>
-              <div className="text-xs text-gray-500">Total Amount</div>
-            </div>
+
           </div>
 
           <div className="flex items-center justify-between">
@@ -401,11 +338,9 @@ export const OrderSummaryPanel = memo(({
           </div>
         </div>
 
-        {/* Customer Information - Collapsible */}
-        <div className="border-b bg-gray-50">
-          {/* Header */}
+        <div className="border-b bg-gray-50 flex-shrink-0">
           <div 
-            className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
+            className="p-1.5 flex items-center justify-between cursor-pointer hover:bg-gray-100 transition-colors"
             onClick={() => setIsCustomerInfoCollapsed(!isCustomerInfoCollapsed)}
           >
             <div className="flex items-center gap-2">
@@ -432,10 +367,9 @@ export const OrderSummaryPanel = memo(({
             </div>
           </div>
 
-          {/* Collapsible Content */}
           {!isCustomerInfoCollapsed && (
-            <div className="px-3 pb-3">
-              <div className="space-y-3">
+            <div className="px-2 pb-1">
+              <div className="space-y-1.5">
                 <div className="flex items-center gap-4">
                   <Label className="text-sm font-medium text-gray-700">Customer Type:</Label>
                   <div className="flex items-center gap-3">
@@ -509,15 +443,9 @@ export const OrderSummaryPanel = memo(({
           )}
         </div>
 
-        {/* Order Items */}
-        <div className="flex-1 overflow-y-auto p-3 min-h-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          <style jsx>{`
-            .flex-1::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
+        <div className="overflow-y-auto p-2 scrollbar-hide" style={{ height: 'calc(100vh - 380px)', minHeight: '200px' }}>
           {orderItems.length === 0 ? (
-            <div className="text-center py-6">
+            <div className="text-center py-4">
               <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
                 <Receipt className="w-6 h-6 text-gray-400" />
               </div>
@@ -525,12 +453,11 @@ export const OrderSummaryPanel = memo(({
               <p className="text-xs text-gray-400">Add items from the menu</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {orderItems.map((item) => (
                 <OrderItem
                   key={item.id}
                   item={item}
-                  onUpdateQuantity={onUpdateQuantity}
                   onRemoveFromOrder={onRemoveFromOrder}
                 />
               ))}
@@ -538,71 +465,90 @@ export const OrderSummaryPanel = memo(({
           )}
         </div>
 
-        {/* Order Totals and Actions */}
         {orderItems.length > 0 && (
-          <div className="border-t bg-white p-3 flex-shrink-0">
-            <div className="space-y-1.5 mb-3">
-              <div className="flex justify-between text-sm">
+          <div className="border-t bg-white p-1.5 flex-shrink-0 min-h-0">
+            <div className="space-y-0.5 mb-1">
+              <div className="flex justify-between text-xs">
                 <span className="text-gray-600">Subtotal</span>
                 <span className="text-gray-900 font-medium">{formatPrice(subtotal)}</span>
               </div>
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-600">Service Charge (10%)</span>
+                <span className="text-gray-900 font-medium">{formatPrice(serviceCharge)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
                 <span className="text-gray-600">VAT ({(taxRate * 100).toFixed(0)}%)</span>
                 <span className="text-gray-900 font-medium">{formatPrice(tax)}</span>
               </div>
-              <div className="flex justify-between text-base font-bold border-t pt-1.5">
+              <div className="flex justify-between text-sm font-bold border-t pt-1">
                 <span>Total</span>
                 <span className="text-green-600">{formatPrice(total)}</span>
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="space-y-2">
-              {/* Add More Items Button for existing orders */}
+            <div className="space-y-1">
               {canAddMoreItems && hasNewItems && (
                 <Button 
                   onClick={onAddMoreItems}
                   disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                  className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                  className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white py-1 px-2 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-all duration-200 text-xs"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3 h-3" />
                   Add More Items
                 </Button>
               )}
 
-              {/* Main action button */}
               {existingOrder?.status === OrderStatus.PENDING ? (
-                <Button 
-                  onClick={() => setShowSendDraftDialog(true)}
-                  disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-                >
-                  {isSubmittingOrder ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Sending to Kitchen...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Send Draft to Kitchen
-                    </>
-                  )}
-                </Button>
+                <>
+                  <Button 
+                    onClick={() => setShowSendDraftDialog(true)}
+                    disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-1 px-2 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-all duration-200 text-xs"
+                  >
+                    {isSubmittingOrder ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3 h-3" />
+                        Send Draft to Kitchen
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    onClick={onCancelOrder}
+                    disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                    className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white py-1 px-2 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-all duration-200 text-xs"
+                  >
+                    {isClearingOrder ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Canceling...
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-3 h-3" />
+                        Cancel Draft
+                      </>
+                    )}
+                  </Button>
+                </>
               ) : existingOrder && existingOrder.status !== OrderStatus.IN_PROGRESS ? (
                 <Button 
                   onClick={() => setShowSettleDialog(true)}
                   disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-1 px-2 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-all duration-200 text-xs"
                 >
                   {isSettlingOrder ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Settling Order...
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Settling...
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
+                      <CheckCircle2 className="w-3 h-3" />
                       Settle Order
                     </>
                   )}
@@ -611,46 +557,35 @@ export const OrderSummaryPanel = memo(({
                 <Button 
                   onClick={() => hasNewItems ? setShowSendToKitchenDialog(true) : undefined}
                   disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder || !hasNewItems}
-                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-1 px-2 rounded-lg font-medium flex items-center justify-center gap-1.5 transition-all duration-200 text-xs"
                 >
                   {isSubmittingOrder ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Sending Order...
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Sending...
                     </>
                   ) : (
                     <>
-                      <Send className="w-4 h-4" />
-                      {hasNewItems ? "Send to Kitchen" : "No New Items"}
+                      <Send className="w-3 h-3" />
+                      {hasNewItems ? "Send Order" : "No New Items"}
                     </>
                   )}
                 </Button>
               )}
 
-              {/* Secondary buttons */}
-              <div className="grid grid-cols-2 gap-2">
+              <div className="flex grid grid-cols-2 gap-1">
                 {(!existingOrder || existingOrder.status === OrderStatus.PENDING) && hasNewItems && (
                   <Button 
                     onClick={onSaveAsDraft}
                     disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
                     variant="outline" 
-                    className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                    className="py-1 px-2 w-full rounded-lg font-medium flex items-center justify-center gap-1 transition-all duration-200 text-xs"
                   >
-                    <Save className="w-4 h-4" />
-                    Draft
+                    <Save className="w-3 h-3" />
+                    Save Draft
                   </Button>
                 )}
 
-                {!existingOrder && (
-                  <Button 
-                    disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                    variant="outline" 
-                    className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-                  >
-                    <Coffee className="w-4 h-4" />
-                    Bar
-                  </Button>
-                )}
 
                 {existingOrder && existingOrder.status !== OrderStatus.PENDING && (
                   <>
@@ -658,19 +593,21 @@ export const OrderSummaryPanel = memo(({
                       onClick={() => setShowPrintDialog(true)}
                       disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
                       variant="outline" 
-                      className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
+                      className="py-1 px-2 rounded-lg font-medium flex items-center justify-center gap-1 transition-all duration-200 text-xs"
                     >
-                      <Printer className="w-4 h-4" />
+                      <Printer className="w-3 h-3" />
                       Print
                     </Button>
-                    <Button 
-                      disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
-                      variant="outline" 
-                      className="py-2 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-all duration-200 text-sm"
-                    >
-                      <Coffee className="w-4 h-4" />
-                      Add Drinks
-                    </Button>
+                    {!orderItems.every(item => item.status === OrderItemStatus.SERVED) && (
+                      <Button 
+                        disabled={isSubmittingOrder || isClearingOrder || isSettlingOrder}
+                        variant="destructive" 
+                        className="py-1 px-2 rounded-lg font-medium flex items-center justify-center gap-1 transition-all duration-200 text-xs"
+                      >
+                        <XCircle className="w-3 h-3" />
+                        Cancel
+                      </Button>
+                    )}
                   </>
                 )}
               </div>
@@ -679,7 +616,6 @@ export const OrderSummaryPanel = memo(({
         )}
       </div>
 
-      {/* Settle Order Confirmation Dialog */}
       <AlertDialog open={showSettleDialog} onOpenChange={setShowSettleDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -687,8 +623,10 @@ export const OrderSummaryPanel = memo(({
               <AlertTriangle className="w-5 h-5 text-orange-500" />
               Confirm Order Settlement
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
+            <AlertDialogDescription>
               Are you sure you want to settle this order?
+            </AlertDialogDescription>
+            <div className="space-y-2">
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Order Total:</span>
@@ -708,7 +646,7 @@ export const OrderSummaryPanel = memo(({
               <p className="text-sm text-gray-600">
                 Once settled, this order will be marked as completed and cannot be modified.
               </p>
-            </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -723,16 +661,17 @@ export const OrderSummaryPanel = memo(({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Print Receipt Confirmation Dialog */}
       <AlertDialog open={showPrintDialog} onOpenChange={setShowPrintDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Printer className="w-5 h-5 text-blue-500" />
-              Print Receipt
+              Print Kitchen Order
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              Do you want to print the receipt for this order?
+            <AlertDialogDescription>
+              Print this order to the default printer (Kitchen/Bar)?
+            </AlertDialogDescription>
+            <div className="space-y-2">
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Order Total:</span>
@@ -754,9 +693,9 @@ export const OrderSummaryPanel = memo(({
                 </div>
               </div>
               <p className="text-sm text-gray-600">
-                This will send the receipt to the default printer.
+                This will send the kitchen order to your default printer.
               </p>
-            </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -765,13 +704,12 @@ export const OrderSummaryPanel = memo(({
               className="bg-blue-600 hover:bg-blue-700"
             >
               <Printer className="w-4 h-4 mr-2" />
-              Print Receipt
+              Print Order
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Send to Kitchen Confirmation Dialog */}
       <AlertDialog open={showSendToKitchenDialog} onOpenChange={setShowSendToKitchenDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -779,8 +717,10 @@ export const OrderSummaryPanel = memo(({
               <Send className="w-5 h-5 text-blue-500" />
               Send Order to Kitchen
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              Are you ready to send this order to the kitchen?
+            <AlertDialogDescription>
+              Send this order to the kitchen/bar and print?
+            </AlertDialogDescription>
+            <div className="space-y-2">
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Order Total:</span>
@@ -800,9 +740,9 @@ export const OrderSummaryPanel = memo(({
                 </div>
               </div>
               <p className="text-sm text-gray-600">
-                Once sent, the kitchen will begin preparing the order items.
+                The order will be sent to the kitchen/bar and automatically printed to the default printer.
               </p>
-            </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -811,22 +751,23 @@ export const OrderSummaryPanel = memo(({
               className="bg-blue-600 hover:bg-blue-700"
             >
               <Send className="w-4 h-4 mr-2" />
-              Send to Kitchen
+              Send & Print
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Send Draft to Kitchen Confirmation Dialog */}
       <AlertDialog open={showSendDraftDialog} onOpenChange={setShowSendDraftDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Send className="w-5 h-5 text-blue-500" />
-              Send Draft Order to Kitchen
+              Send Draft to Kitchen
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              Are you ready to send this draft order to the kitchen?
+            <AlertDialogDescription>
+              Send this draft order to the kitchen/bar and print?
+            </AlertDialogDescription>
+            <div className="space-y-2">
               <div className="bg-gray-50 p-3 rounded-lg">
                 <div className="flex justify-between items-center">
                   <span className="font-medium">Order Total:</span>
@@ -852,9 +793,9 @@ export const OrderSummaryPanel = memo(({
                 </div>
               </div>
               <p className="text-sm text-gray-600">
-                This will change the order status from draft to active and the kitchen will begin preparation.
+                This will change the order from draft to active, send it to kitchen/bar, and print automatically.
               </p>
-            </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -863,7 +804,7 @@ export const OrderSummaryPanel = memo(({
               className="bg-blue-600 hover:bg-blue-700"
             >
               <Send className="w-4 h-4 mr-2" />
-              Send to Kitchen
+              Send & Print
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

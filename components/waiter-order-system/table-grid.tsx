@@ -7,7 +7,9 @@ import {
   CheckCircle2, 
   Clock, 
   AlertCircle,
-  TableCellsMergeIcon 
+  TableCellsMergeIcon,
+  ChevronRight,
+  ChevronLeft
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TableStatus, OrderStatus } from "@prisma/client"
@@ -124,26 +126,26 @@ const TableCard = memo(({
   return (
     <div
       onClick={() => onSelect(table.id)}
-      className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${statusInfo.color} ${
-        isSelected ? "ring-2 ring-blue-400 ring-offset-2" : ""
+      className={`relative p-2 rounded-md border-2 cursor-pointer transition-all duration-200 ${statusInfo.color} ${
+        isSelected ? "ring-2 ring-blue-400 ring-offset-1" : ""
       }`}
     >
       <div className="text-center">
-        <div className="text-xl font-bold mb-1">T{table.number}</div>
-        <div className="flex items-center justify-center gap-1 text-xs mb-2">
-          <StatusIcon className="w-3 h-3" />
+        <div className="text-sm font-bold mb-0.5">T{table.number}</div>
+        <div className="flex items-center justify-center gap-0.5 text-[10px] mb-1">
+          <StatusIcon className="w-2.5 h-2.5" />
           <span>{statusInfo.text}</span>
         </div>
 
-        <div className="space-y-1">
-          <div className="flex items-center justify-center gap-1 text-xs">
-            <Users className="w-3 h-3" />
-            <span>{table.capacity} seats</span>
+        <div className="space-y-0.5">
+          <div className="flex items-center justify-center gap-0.5 text-[10px]">
+            <Users className="w-2.5 h-2.5" />
+            <span>{table.capacity}</span>
           </div>
-          {table.location && <div className="text-xs opacity-75">{table.location}</div>}
+          {table.location && <div className="text-[10px] opacity-75">{table.location}</div>}
           {table.currentOrder && (
-            <div className="text-xs text-blue-600 font-medium flex items-center justify-center gap-1">
-              <Edit3 className="w-3 h-3" />
+            <div className="text-[10px] text-blue-600 font-medium flex items-center justify-center gap-0.5">
+              <Edit3 className="w-2.5 h-2.5" />
               {table.currentOrder.orderNumber}
             </div>
           )}
@@ -206,18 +208,18 @@ export const TableGrid = memo(({
 
   if (isCollapsed) {
     return (
-      <div className="w-24 border-r flex flex-col transition-all duration-300">
+      <div className="w-24 border-r flex flex-col h-full min-h-0 transition-all duration-300">
         <div className="p-2 border-b bg-white flex justify-center">
           <Button 
             variant='outline' 
             size="sm" 
             onClick={onToggleCollapse}
           >
-            <TableCellsMergeIcon className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-2 bg-gray-50 scrollbar-hide min-h-0">
           <div className="space-y-2">
             {tables.map((table) => (
               <CollapsedTableCard
@@ -234,7 +236,7 @@ export const TableGrid = memo(({
   }
 
   return (
-    <div className="w-80 border-r flex flex-col transition-all duration-300">
+    <div className="w-80 border-r flex flex-col h-full min-h-0 transition-all duration-300">
       <div className="p-4 border-b bg-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -254,14 +256,14 @@ export const TableGrid = memo(({
               size="sm" 
               onClick={onToggleCollapse}
             >
-              <TableCellsMergeIcon className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4" />
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-        <div className="grid grid-cols-2 gap-3">
+      <div className="flex-1 overflow-y-auto p-2 bg-gray-50 scrollbar-hide min-h-0">
+        <div className="grid grid-cols-3 gap-1.5">
           {tables.map((table) => (
             <TableCard
               key={table.id}

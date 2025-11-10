@@ -24,7 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-
 import { useBusinessUnitModal } from "@/hooks/use-bu-modal"
 import { BusinessUnitItem } from "@/types/business-unit-types"
 
@@ -33,7 +32,6 @@ interface BusinessUnitSwitcherProps {
   className?: string
 }
 
-// Icon mapping based on display name
 const getAppTypeIcon = (name?: string): React.ComponentType<{ className?: string }> => {
   if (!name) return Monitor
   
@@ -92,63 +90,56 @@ export default function BusinessUnitSwitcher({
     businessUnitModal.onOpen()
   }
 
-  // Static display for single unit users
+  const IconComponent = getAppTypeIcon(currentBusinessUnit?.name || '')
+
+  // Static compact display for single unit users
   if (!isSwitcherActive) {
-    const IconComponent = getAppTypeIcon(currentBusinessUnit?.name || '')
-    
     return (
       <div
         className={cn(
-          "flex items-center justify-start px-3 py-2 bg-white border border-gray-200 rounded-lg shadow-sm",
+          "flex items-center gap-2 px-2.5 py-1.5 bg-muted/50 border rounded-md",
           className
         )}
       >
-        <IconComponent className="mr-3 h-4 w-4 text-gray-500" />
-        <div>
-          <div className="text-sm font-semibold text-gray-900 leading-tight">
-            {currentBusinessUnit?.name || "No Unit Assigned"}
-          </div>
-          <div className="text-xs text-gray-500 leading-tight">
-            {getAppTypeLabel(currentBusinessUnit?.name || '')}
+        <IconComponent className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium truncate">
+            {currentBusinessUnit?.name || "No Unit"}
           </div>
         </div>
       </div>
     )
   }
 
-  // Interactive dropdown for multi-unit users
-  const CurrentIcon = getAppTypeIcon(currentBusinessUnit?.name || '')
-
+  // Compact interactive dropdown
   return (
-    <div className={className}>
+    <div className={cn("w-full", className)}>
       <DropdownMenu open={open} onOpenChange={setOpen}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="w-full justify-start px-3 py-2 h-auto bg-white border-gray-200 hover:bg-gray-50 hover:border-blue-300 text-gray-900 shadow-sm"
+            size="sm"
+            className="w-full justify-between gap-2 px-2.5 h-9 font-normal"
           >
-            <CurrentIcon className="mr-3 h-4 w-4 text-gray-500" />
-            <div className="flex-1 text-left min-w-0">
-              <div className="text-sm font-semibold text-gray-900 leading-tight truncate">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <IconComponent className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="text-sm font-medium truncate">
                 {currentBusinessUnit?.name || "Select Unit"}
-              </div>
-              <div className="text-xs text-gray-500 leading-tight">
-                {getAppTypeLabel(currentBusinessUnit?.name || '')}
-              </div>
+              </span>
             </div>
             <ChevronDown className={cn(
-              "ml-2 h-4 w-4 text-gray-500 transition-transform duration-200",
+              "h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200",
               open && "rotate-180"
             )} />
           </Button>
         </DropdownMenuTrigger>
 
         <DropdownMenuContent
-          className="w-72 max-h-96 bg-white border-gray-200 shadow-xl"
+          className="w-[280px] max-h-[400px] overflow-y-auto"
           align="start"
+          sideOffset={4}
         >
-          {/* Production Section */}
-          <DropdownMenuLabel className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase">
             Production
           </DropdownMenuLabel>
 
@@ -156,18 +147,18 @@ export default function BusinessUnitSwitcher({
           {currentBusinessUnit && (
             <DropdownMenuItem
               onClick={() => onBusinessUnitSelect(currentBusinessUnit.id)}
-              className="mx-2 mb-2 p-3 rounded-md bg-blue-50 border border-blue-200 hover:bg-blue-50 cursor-pointer"
+              className="mx-1 mb-1 gap-2 rounded-sm bg-accent/50"
             >
-              <CurrentIcon className="mr-3 h-4 w-4 text-blue-600" />
+              <IconComponent className="h-4 w-4 shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-gray-900 leading-tight">
+                <div className="text-sm font-medium truncate">
                   {currentBusinessUnit.name}
                 </div>
-                <div className="text-xs text-gray-500 leading-tight">
+                <div className="text-xs text-muted-foreground truncate">
                   {getAppTypeLabel(currentBusinessUnit.name)}
                 </div>
               </div>
-              <Check className="ml-2 h-4 w-4 text-blue-600" />
+              <Check className="h-4 w-4 shrink-0" />
             </DropdownMenuItem>
           )}
 
@@ -176,19 +167,19 @@ export default function BusinessUnitSwitcher({
             .filter(item => item.id !== currentBusinessUnit?.id)
             .slice(0, 3)
             .map((item) => {
-              const IconComponent = getAppTypeIcon(item.name)
+              const Icon = getAppTypeIcon(item.name)
               return (
                 <DropdownMenuItem
                   key={item.id}
                   onClick={() => onBusinessUnitSelect(item.id)}
-                  className="mx-2 p-3 rounded-md hover:bg-gray-50 cursor-pointer"
+                  className="mx-1 gap-2 rounded-sm"
                 >
-                  <IconComponent className="mr-3 h-4 w-4 text-gray-500" />
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 leading-tight">
+                    <div className="text-sm font-medium truncate">
                       {item.name}
                     </div>
-                    <div className="text-xs text-gray-500 leading-tight">
+                    <div className="text-xs text-muted-foreground truncate">
                       {getAppTypeLabel(item.name)}
                     </div>
                   </div>
@@ -196,32 +187,31 @@ export default function BusinessUnitSwitcher({
               )
             })}
 
-          {/* Development Section (if more items) */}
+          {/* Development Section */}
           {items.length > 4 && (
             <>
-              <div className="px-3 py-2 mt-2">
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Development
-                </div>
-              </div>
+              <DropdownMenuSeparator className="my-1" />
+              <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase">
+                Development
+              </DropdownMenuLabel>
 
               {items
                 .filter(item => item.id !== currentBusinessUnit?.id)
                 .slice(3)
                 .map((item) => {
-                  const IconComponent = getAppTypeIcon(item.name)
+                  const Icon = getAppTypeIcon(item.name)
                   return (
                     <DropdownMenuItem
                       key={item.id}
                       onClick={() => onBusinessUnitSelect(item.id)}
-                      className="mx-2 p-3 rounded-md hover:bg-gray-50 cursor-pointer"
+                      className="mx-1 gap-2 rounded-sm"
                     >
-                      <IconComponent className="mr-3 h-4 w-4 text-gray-500" />
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 leading-tight">
+                        <div className="text-sm font-medium truncate">
                           {item.name}
                         </div>
-                        <div className="text-xs text-gray-500 leading-tight">
+                        <div className="text-xs text-muted-foreground truncate">
                           {getAppTypeLabel(item.name)}
                         </div>
                       </div>
@@ -231,21 +221,16 @@ export default function BusinessUnitSwitcher({
             </>
           )}
 
-          <DropdownMenuSeparator className="my-2 mx-2 border-gray-200" />
+          <DropdownMenuSeparator className="my-1" />
 
-          {/* Add Product Option */}
+          {/* Add Business Unit */}
           <DropdownMenuItem
             onClick={handleAddProduct}
-            className="mx-2 p-3 rounded-md hover:bg-gray-50 cursor-pointer"
+            className="mx-1 gap-2 rounded-sm"
           >
-            <Plus className="mr-3 h-4 w-4 text-gray-500" />
+            <Plus className="h-4 w-4 shrink-0 text-muted-foreground" />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-gray-900 leading-tight">
-                Add Business Unit
-              </div>
-              <div className="text-xs text-gray-500 leading-tight">
-                Business Unit
-              </div>
+              <div className="text-sm font-medium">Add Business Unit</div>
             </div>
           </DropdownMenuItem>
         </DropdownMenuContent>

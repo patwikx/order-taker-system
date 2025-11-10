@@ -4,6 +4,7 @@
 import type React from "react"
 
 import { useState, useTransition } from "react"
+import Link from "next/link"
 import {
   Plus,
   Edit,
@@ -43,7 +44,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import {
   DropdownMenu,
@@ -60,10 +60,8 @@ import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { ItemType } from "@prisma/client"
 import {
-  createMenuItem,
   updateMenuItem,
   deleteMenuItem,
-  type CreateMenuItemInput,
   type UpdateMenuItemInput,
   type MenuItemWithCategory,
 } from "@/lib/actions/menu-actions"
@@ -304,7 +302,6 @@ export function MenuItemManagement({ businessUnitId, initialMenuItems, categorie
   const [selectedType, setSelectedType] = useState<string>("all")
   const [showUnavailable, setShowUnavailable] = useState(false)
   const [selectedMenuItem, setSelectedMenuItem] = useState<MenuItemWithCategory | null>(null)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
@@ -336,30 +333,6 @@ export function MenuItemManagement({ businessUnitId, initialMenuItems, categorie
     if (currentPage !== 1) {
       setCurrentPage(1)
     }
-  }
-
-  const handleCreateMenuItem = (formData: MenuItemFormData) => {
-    startTransition(async () => {
-      const menuItemData: CreateMenuItemInput = {
-        name: formData.name,
-        description: formData.description || undefined,
-        price: formData.price,
-        categoryId: formData.categoryId,
-        type: formData.type,
-        prepTime: formData.prepTime || undefined,
-        imageUrl: formData.imageUrl || undefined,
-      }
-
-      const result = await createMenuItem(businessUnitId, menuItemData)
-
-      if (result.success && result.menuItem) {
-        setMenuItems((prev) => [...prev, result.menuItem])
-        setIsCreateDialogOpen(false)
-        toast.success("Menu item created successfully.")
-      } else {
-        toast.error("Failed to create menu item.")
-      }
-    })
   }
 
   const handleUpdateMenuItem = (formData: MenuItemFormData) => {
@@ -663,26 +636,12 @@ export function MenuItemManagement({ businessUnitId, initialMenuItems, categorie
               <h1 className="text-2xl font-bold text-gray-900">Menu Items</h1>
               <p className="text-gray-600 mt-1">Manage your menu items and pricing</p>
             </div>
-            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Menu Item
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Create New Menu Item</DialogTitle>
-                  <DialogDescription>Add a new item to your menu</DialogDescription>
-                </DialogHeader>
-                <MenuItemForm
-                  categories={categories.filter((c) => c.isActive)}
-                  onSubmit={handleCreateMenuItem}
-                  onCancel={() => setIsCreateDialogOpen(false)}
-                  isLoading={isPending}
-                />
-              </DialogContent>
-            </Dialog>
+            <Link href={`/${businessUnitId}/menu/menu-items/create`}>
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Menu Item
+              </Button>
+            </Link>
           </div>
         </div>
         
@@ -700,10 +659,12 @@ export function MenuItemManagement({ businessUnitId, initialMenuItems, categorie
                   : "Get started by creating your first menu item to build your menu."}
               </p>
               {!searchQuery && selectedCategory === "all" && selectedType === "all" && !showUnavailable && (
-                <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Menu Item
-                </Button>
+                <Link href={`/${businessUnitId}/menu/menu-items/create`}>
+                  <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Menu Item
+                  </Button>
+                </Link>
               )}
             </div>
           ) : (
@@ -741,7 +702,12 @@ export function MenuItemManagement({ businessUnitId, initialMenuItems, categorie
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="font-medium text-gray-900 truncate">{item.name}</div>
+                                <Link 
+                                  href={`/${businessUnitId}/menu/menu-items/${item.id}`}
+                                  className="font-medium text-gray-900 truncate hover:text-blue-600 transition-colors cursor-pointer block"
+                                >
+                                  {item.name}
+                                </Link>
                                 {item.description && (
                                   <div className="text-sm text-gray-500 truncate max-w-xs" title={item.description}>
                                     {item.description}
@@ -794,34 +760,44 @@ export function MenuItemManagement({ businessUnitId, initialMenuItems, categorie
                             {item.updatedAt.toLocaleDateString()}
                           </TableCell>
                           <TableCell>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                  <MoreHorizontal className="h-4 w-4" />
+                            <div className="flex items-center gap-2">
+                              <Link href={`/${businessUnitId}/menu/menu-items/${item.id}`}>
+                                <Button variant="ghost" size="sm" className="h-8 px-2">
+                                  <Eye className="w-4 h-4 mr-1" />
+                                  View
                                 </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              </Link>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setSelectedMenuItem(item)
-                                    setIsEditDialogOpen(true)
-                                  }}
-                                >
-                                  <Edit className="w-4 h-4 mr-2" />
-                                  Edit
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/${businessUnitId}/menu/menu-items/${item.id}`} className="cursor-pointer">
+                                    <Eye className="w-4 h-4 mr-2" />
+                                    View Details
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem asChild>
+                                  <Link href={`/${businessUnitId}/menu/menu-items/${item.id}`} className="cursor-pointer">
+                                    <Edit className="w-4 h-4 mr-2" />
+                                    Edit
+                                  </Link>
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleToggleAvailability(item)}>
                                   {item.isAvailable ? (
                                     <>
                                       <EyeOff className="w-4 h-4 mr-2" />
-                                      Disable
+                                      Mark Unavailable
                                     </>
                                   ) : (
                                     <>
-                                      <Eye className="w-4 h-4 mr-2" />
-                                      Enable
+                                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                                      Mark Available
                                     </>
                                   )}
                                 </DropdownMenuItem>
@@ -831,13 +807,14 @@ export function MenuItemManagement({ businessUnitId, initialMenuItems, categorie
                                     setSelectedMenuItem(item)
                                     setIsDeleteDialogOpen(true)
                                   }}
-                                  className="text-red-600"
+                                  className="text-red-600 focus:text-red-600"
                                 >
                                   <Trash2 className="w-4 h-4 mr-2" />
                                   Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )

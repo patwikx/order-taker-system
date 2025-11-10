@@ -136,6 +136,38 @@ export async function getMenuItems(businessUnitId: string) {
   }
 }
 
+// Get a single menu item by ID
+export async function getMenuItemById(businessUnitId: string, menuItemId: string) {
+  try {
+    const menuItem = await prisma.menuItem.findFirst({
+      where: {
+        id: menuItemId,
+        businessUnitId,
+      },
+      include: {
+        category: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            sortOrder: true,
+          },
+        },
+      },
+    })
+
+    if (!menuItem) {
+      return null
+    }
+
+    // Convert Decimal to number
+    return convertDecimalToNumber(menuItem) as MenuItemWithCategory
+  } catch (error) {
+    console.error("Error fetching menu item:", error)
+    return null
+  }
+}
+
 // Get menu items by category
 export async function getMenuItemsByCategory(businessUnitId: string, categoryId: string) {
   try {

@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  Save,
   RefreshCw,
   Crown,
   Package,
@@ -27,7 +26,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import type { PermissionScope } from "@prisma/client"
 import {
